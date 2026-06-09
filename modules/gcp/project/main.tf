@@ -5,6 +5,8 @@ resource "google_project" "this" {
 
   billing_account = var.billing_account
   labels          = var.labels
+
+  deletion_policy = var.deletion_policy
 }
 
 resource "google_project_service" "apis" {
