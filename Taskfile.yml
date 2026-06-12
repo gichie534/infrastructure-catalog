@@ -1,0 +1,133 @@
+version: '3'
+
+# Repo-wide automation for the infrastructure-catalog Terraform modules.
+# Task is a standalone Go binary (https://taskfile.dev) — do not assume Make.
+#
+# Conventions (see .kiro/steering):
+#   - tech / structure / module-conventions / testing-conventions
+#   - `check` is the cost-free CI gate (fmt + validate + lint + docs). It never
+#     creates cloud resources and never runs `test`.
+#   - `test` runs Terratest (real resources) against a sandbox account.
+
+vars:
+  # Root holding all modules; every <provider>/<name> lives under here.
+  MODULES_DIR: modules
+  # Terratest timeout — module applies/destroys can be slow.
+  TEST_TIMEOUT: 90m
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  fmt:
+    desc: Format all Terraform under modules/ (writes changes)
+    cmds:
+      - terraform fmt -recursive {{.MODULES_DIR}}
+
+  validate:
+    desc: terraform init -backend=false + validate for every dir containing .tf
+    cmds:
+      - |
+        set -eu
+        # Every directory under modules/ that contains .tf files (modules + examples).
+        dirs=$(find {{.MODULES_DIR}} -type f -name '*.tf' -not -path '*/.terraform/*' \
+          -exec dirname {} \; | sort -u)
+        if [ -z "$dirs" ]; then
+          echo "no Terraform directories found under {{.MODULES_DIR}}/"
+          exit 0
+        fi
+        for d in $dirs; do
+          echo "==> validate $d"
+          terraform -chdir="$d" init -backend=false -input=false -no-color >/dev/null
+          terraform -chdir="$d" validate -no-color
+        done
+
+  lint:
+    desc: tflint per module + tfsec across modules/
+    cmds:
+      - |
+        set -eu
+        # tflint runs per module directory (modules/<provider>/<name>).
+        for d in $(find {{.MODULES_DIR}} -mindepth 2 -maxdepth 2 -type d | sort); do
+          [ -n "$(find "$d" -maxdepth 1 -name '*.tf' -print -quit)" ] || continue
+          echo "==> tflint $d"
+          ( cd "$d" && tflint --init >/dev/null 2>&1 || true; tflint )
+        done
+      - |
+        set -eu
+        # tfsec scans the whole tree. Skip with a clear hint if it isn't installed
+        # (it is not part of the default toolchain yet).
+        if command -v tfsec >/dev/null 2>&1; then
+          echo "==> tfsec {{.MODULES_DIR}}"
+          tfsec {{.MODULES_DIR}}
+        else
+          echo "WARN: tfsec not installed — skipping scan. Install it to enable (brew install tfsec)."
+        fi
+
+  docs:
+    desc: Regenerate each module's README inputs/outputs tables (terraform-docs inject)
+    cmds:
+      - task: docs:run
+        vars: {DOCS_FLAGS: ''}
+
+  test:
+    desc: 'Run Terratest (real resources). Target one module with MODULE=<provider>/<name>'
+    cmds:
+      - |
+        set -eu
+        if [ -n "{{.MODULE}}" ]; then
+          target="./{{.MODULES_DIR}}/{{.MODULE}}/test/..."
+          echo "==> go test $target"
+        else
+          target="./..."
+          echo "==> go test ./... (all modules)"
+        fi
+        go test -timeout {{.TEST_TIMEOUT}} -v "$target"
+    vars:
+      MODULE: '{{.MODULE | default ""}}'
+
+  check:
+    desc: Cost-free CI gate — fmt (check), validate, lint, docs (check). No cloud resources, no test.
+    cmds:
+      - task: fmt:check
+      - task: validate
+      - task: lint
+      - task: docs:check
+
+  new:
+    desc: Scaffold a new module — task new MODULE=<provider>/<name> (e.g. gcp/vpc)
+    requires:
+      vars: [MODULE]
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/scaffold-module.sh '{{.MODULE}}' '{{.MODULES_DIR}}'"
+
+  # ---------------------------------------------------------------------------
+  # Internal helpers (hidden from `task --list`).
+  # ---------------------------------------------------------------------------
+
+  fmt:check:
+    internal: true
+    cmds:
+      - terraform fmt -recursive -check -diff {{.MODULES_DIR}}
+
+  docs:run:
+    internal: true
+    cmds:
+      - |
+        set -eu
+        if ! command -v terraform-docs >/dev/null 2>&1; then
+          echo "WARN: terraform-docs not installed — skipping docs. Install it (brew install terraform-docs)."
+          exit 0
+        fi
+        for d in $(find {{.MODULES_DIR}} -mindepth 2 -maxdepth 2 -type d | sort); do
+          [ -n "$(find "$d" -maxdepth 1 -name '*.tf' -print -quit)" ] || continue
+          echo "==> terraform-docs $d"
+          terraform-docs markdown table --output-file README.md --output-mode inject {{.DOCS_FLAGS}} "$d"
+        done
+
+  docs:check:
+    internal: true
+    cmds:
+      - task: docs:run
+        vars: {DOCS_FLAGS: '--output-check'}
