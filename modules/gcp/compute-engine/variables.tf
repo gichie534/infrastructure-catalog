@@ -1,13 +1,13 @@
 variable "name" {
   description = "Name of the compute instance"
   type        = string
-  nullable = false
+  nullable    = false
 }
 
 variable "project_id" {
   description = "The ID of the project in which to create the instance"
   type        = string
-  nullable = false
+  nullable    = false
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.project_id))
@@ -23,27 +23,27 @@ variable "project_id" {
 variable "machine_type" {
   description = "Machine type for the instance"
   type        = string
-  nullable = false
+  nullable    = false
   default     = "e2-micro"
 }
 
 variable "zone" {
   description = "Zone where the instance will be created"
   type        = string
-  nullable = false
+  nullable    = false
   default     = "us-central1-a"
 }
 
 variable "image" {
   description = "Boot disk image"
   type        = string
-  nullable = false
+  nullable    = false
   default     = "debian-cloud/debian-12"
 }
 
 variable "network" {
   description = "VPC network for the instance"
   type        = string
-  nullable = false
+  nullable    = false
   default     = "default"
 }
