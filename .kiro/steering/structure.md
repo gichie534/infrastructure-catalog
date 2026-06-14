@@ -20,7 +20,7 @@ inclusion: always
       vpc/
       gke-cluster/
     _shared/                 # cross-provider helpers/conventions (optional)
-  .github/workflows/         # fmt, validate, tflint, tfsec, terraform-docs, test
+  .github/workflows/         # fmt, validate, tflint, trivy, terraform-docs, test
 ```
 
 ## Module layout (every module is identical)

@@ -32,7 +32,7 @@ inclusion: always
 
 ## Linting / scanning
 
-- `terraform fmt`, `terraform validate`, **tflint**, and **tfsec** (or checkov) run on every module.
+- `terraform fmt`, `terraform validate`, **tflint**, and **trivy** (or checkov) run on every module.
 
 ## Automation (Task)
 
@@ -41,7 +41,7 @@ exposes:
 
 - `fmt` — `terraform fmt -recursive`.
 - `validate` — `terraform validate` across modules and examples.
-- `lint` — tflint + tfsec/checkov.
+- `lint` — tflint + trivy/checkov.
 - `docs` — regenerate module READMEs with terraform-docs.
 - `test` — run Terratest (`go test ./...`), with a filter to target a single module.
 - `check` — `fmt` + `validate` + `lint` + `docs`; this is the cost-free pre-commit / CI gate
