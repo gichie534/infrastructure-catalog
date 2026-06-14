@@ -44,7 +44,7 @@ tasks:
         done
 
   lint:
-    desc: tflint per module + tfsec across modules/
+    desc: tflint per module + trivy config scan across modules/
     cmds:
       - |
         set -eu
@@ -56,13 +56,14 @@ tasks:
         done
       - |
         set -eu
-        # tfsec scans the whole tree. Skip with a clear hint if it isn't installed
+        # trivy scans the whole tree for IaC misconfigurations (replaces the
+        # deprecated tfsec). Skip with a clear hint if it isn't installed
         # (it is not part of the default toolchain yet).
-        if command -v tfsec >/dev/null 2>&1; then
-          echo "==> tfsec {{.MODULES_DIR}}"
-          tfsec {{.MODULES_DIR}}
+        if command -v trivy >/dev/null 2>&1; then
+          echo "==> trivy config {{.MODULES_DIR}}"
+          trivy config {{.MODULES_DIR}}
         else
-          echo "WARN: tfsec not installed — skipping scan. Install it to enable (brew install tfsec)."
+          echo "WARN: trivy not installed — skipping scan. Install it to enable (brew install trivy)."
         fi
 
   docs:
@@ -88,7 +89,7 @@ tasks:
       MODULE: '{{.MODULE | default ""}}'
 
   check:
-    desc: Cost-free CI gate — fmt (check), validate, lint, docs (check). No cloud resources, no test.
+    desc: Cost-free (No cloud resources are created) CI gate — fmt (check), validate, lint, docs (check).
     cmds:
       - task: fmt:check
       - task: validate
