@@ -4,7 +4,7 @@ output "repository_id" {
 }
 
 output "name" {
-  description = "The fully-qualified repository name (projects/<project>/locations/<location>/repositories/<id>). Wire this into the workload-iam module to grant reader/writer IAM."
+  description = "The fully-qualified repository name (projects/<project>/locations/<location>/repositories/<id>). Wire this into the workload-iam module (for a GSA it creates) to grant reader/writer IAM, or use this module's reader_members/writer_members for existing identities."
   value       = google_artifact_registry_repository.this.name
 }
 

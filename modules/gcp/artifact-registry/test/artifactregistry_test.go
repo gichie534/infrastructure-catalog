@@ -27,12 +27,15 @@ func TestArtifactRegistryBasic(t *testing.T) {
 	require.NotEmpty(t, projectID, "set GOOGLE_PROJECT (or GCP_PROJECT) to a sandbox project to run this test")
 
 	repositoryID := fmt.Sprintf("example-ar-%s", strings.ToLower(random.UniqueId()))
+	// SA account_id: 6-30 chars, lowercase; keep it short and unique.
+	pullerAccountID := fmt.Sprintf("ar-puller-%s", strings.ToLower(random.UniqueId()))
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"project_id":    projectID,
-			"repository_id": repositoryID,
+			"project_id":        projectID,
+			"repository_id":     repositoryID,
+			"puller_account_id": pullerAccountID,
 		},
 	})
 
@@ -47,4 +50,7 @@ func TestArtifactRegistryBasic(t *testing.T) {
 
 	registryURL := terraform.Output(t, terraformOptions, "registry_url")
 	assert.Contains(t, registryURL, "-docker.pkg.dev/"+projectID+"/"+repositoryID)
+
+	pullerEmail := terraform.Output(t, terraformOptions, "puller_email")
+	assert.Contains(t, pullerEmail, pullerAccountID+"@")
 }

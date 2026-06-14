@@ -51,3 +51,37 @@ variable "labels" {
   nullable    = false
   default     = {}
 }
+
+variable "reader_members" {
+  description = <<-EOT
+    Existing IAM members to grant repo-scoped roles/artifactregistry.reader, as a map of arbitrary
+    stable label => IAM member string (e.g. "serviceAccount:<num>-compute@developer.gserviceaccount.com"
+    for a GKE node SA that pulls images). Map keys must be known at plan time. Use this for identities
+    that already exist; for a GSA created by another module, wire that module against the `name` output
+    instead.
+  EOT
+  type        = map(string)
+  nullable    = false
+  default     = {}
+
+  validation {
+    condition     = alltrue([for m in values(var.reader_members) : can(regex("^(user|serviceAccount|group|domain|principal|principalSet):", m))])
+    error_message = "each reader_members value must be a valid IAM member (user:, serviceAccount:, group:, domain:, principal:, or principalSet:)."
+  }
+}
+
+variable "writer_members" {
+  description = <<-EOT
+    Existing IAM members to grant repo-scoped roles/artifactregistry.writer, as a map of arbitrary
+    stable label => IAM member string (e.g. a CI identity that pushes images). Map keys must be known
+    at plan time. Use this for identities that already exist.
+  EOT
+  type        = map(string)
+  nullable    = false
+  default     = {}
+
+  validation {
+    condition     = alltrue([for m in values(var.writer_members) : can(regex("^(user|serviceAccount|group|domain|principal|principalSet):", m))])
+    error_message = "each writer_members value must be a valid IAM member (user:, serviceAccount:, group:, domain:, principal:, or principalSet:)."
+  }
+}

@@ -62,6 +62,8 @@ No modules.
 | Name | Type |
 | ---- | ---- |
 | [google_artifact_registry_repository.this](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/artifact_registry_repository) | resource |
+| [google_artifact_registry_repository_iam_member.reader](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/artifact_registry_repository_iam_member) | resource |
+| [google_artifact_registry_repository_iam_member.writer](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/artifact_registry_repository_iam_member) | resource |
 
 ## Inputs
 
@@ -72,14 +74,16 @@ No modules.
 | <a name="input_labels"></a> [labels](#input\_labels) | Labels applied to the repository. | `map(string)` | `{}` | no |
 | <a name="input_location"></a> [location](#input\_location) | Location of the repository (e.g. us-central1). | `string` | n/a | yes |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The ID of the project in which to create the repository. | `string` | n/a | yes |
+| <a name="input_reader_members"></a> [reader\_members](#input\_reader\_members) | Existing IAM members to grant repo-scoped roles/artifactregistry.reader, as a map of arbitrary<br/>stable label => IAM member string (e.g. "serviceAccount:<num>-compute@developer.gserviceaccount.com"<br/>for a GKE node SA that pulls images). Map keys must be known at plan time. Use this for identities<br/>that already exist; for a GSA created by another module, wire that module against the `name` output<br/>instead. | `map(string)` | `{}` | no |
 | <a name="input_repository_id"></a> [repository\_id](#input\_repository\_id) | The ID (name) of the repository. | `string` | n/a | yes |
+| <a name="input_writer_members"></a> [writer\_members](#input\_writer\_members) | Existing IAM members to grant repo-scoped roles/artifactregistry.writer, as a map of arbitrary<br/>stable label => IAM member string (e.g. a CI identity that pushes images). Map keys must be known<br/>at plan time. Use this for identities that already exist. | `map(string)` | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
 | ---- | ----------- |
 | <a name="output_location"></a> [location](#output\_location) | The location the repository lives in. |
-| <a name="output_name"></a> [name](#output\_name) | The fully-qualified repository name (projects/<project>/locations/<location>/repositories/<id>). Wire this into the workload-iam module to grant reader/writer IAM. |
+| <a name="output_name"></a> [name](#output\_name) | The fully-qualified repository name (projects/<project>/locations/<location>/repositories/<id>). Wire this into the workload-iam module (for a GSA it creates) to grant reader/writer IAM, or use this module's reader\_members/writer\_members for existing identities. |
 | <a name="output_registry_url"></a> [registry\_url](#output\_registry\_url) | The host/path prefix for artifact references, e.g. <location>-docker.pkg.dev/<project>/<repo> for DOCKER. The host segment reflects the repository format. |
 | <a name="output_repository_id"></a> [repository\_id](#output\_repository\_id) | The short repository ID (name). |
 <!-- END_TF_DOCS -->
