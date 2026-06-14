@@ -33,10 +33,34 @@ resource "google_iam_workload_identity_pool_provider" "this" {
 # Bind each federated principalSet to a Google service account. The full member string is
 # assembled from the pool's server-assigned resource name so callers never need the project
 # number: principalSet://iam.googleapis.com/<pool_name>/<principal_set_suffix>.
+#
+# This is the impersonation fallback — prefer the direct grants below.
 resource "google_service_account_iam_member" "workload_identity_user" {
   for_each = var.service_account_bindings
 
   service_account_id = each.value.service_account_id
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.this.name}/${each.value.principal_set}"
+}
+
+# Direct WIF (preferred): grant project-level roles straight to the federated principalSet, with no
+# intermediary service account. Flatten {label -> {principal_set, roles}} into one binding per
+# (label, role) pair so each grant is its own resource.
+locals {
+  project_iam_grants = merge([
+    for label, b in var.project_iam_bindings : {
+      for role in b.roles : "${label}/${role}" => {
+        principal_set = b.principal_set
+        role          = role
+      }
+    }
+  ]...)
+}
+
+resource "google_project_iam_member" "direct" {
+  for_each = local.project_iam_grants
+
+  project = var.project_id
+  role    = each.value.role
+  member  = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.this.name}/${each.value.principal_set}"
 }

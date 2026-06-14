@@ -15,12 +15,6 @@ variable "pool_id" {
   default     = "example-ci-pool"
 }
 
-variable "account_id" {
-  description = "account_id of the CI service account the federated identity impersonates."
-  type        = string
-  default     = "wif-example-ci"
-}
-
 variable "github_repository" {
   description = "GitHub repository (OWNER/REPO) allowed to federate into the pool and impersonate the SA."
   type        = string

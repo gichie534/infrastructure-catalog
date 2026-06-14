@@ -71,8 +71,12 @@ variable "oidc_providers" {
 
 variable "service_account_bindings" {
   description = <<-EOT
-    Grants federated identities permission to impersonate Google service accounts via
-    roles/iam.workloadIdentityUser, keyed by an arbitrary stable label.
+    OPTIONAL — impersonation fallback. Grants federated identities permission to impersonate Google
+    service accounts via roles/iam.workloadIdentityUser, keyed by an arbitrary stable label.
+
+    Prefer direct WIF (project_iam_bindings / resource-scoped grants against the exported principalSet
+    members) per Google's guidance. Use impersonation only for the services that still cannot accept a
+    federated identity directly and require a real service account.
 
     - service_account_id: fully-qualified GSA resource ID (projects/<p>/serviceAccounts/<email>).
                           Wire this from the workload-iam module's service_account_id output.
@@ -90,4 +94,31 @@ variable "service_account_bindings" {
   }))
   nullable = false
   default  = {}
+}
+
+variable "project_iam_bindings" {
+  description = <<-EOT
+    Direct Workload Identity Federation (preferred). Grants project-level IAM roles straight to a
+    federated principalSet — no intermediary service account. Keyed by an arbitrary stable label.
+
+    - principal_set: the member suffix appended to the pool resource name (e.g.
+                     "attribute.repository/OWNER/REPO", or "*" for the whole pool).
+    - roles:         set of project-level role IDs to grant that principalSet (e.g.
+                     roles/artifactregistry.writer, roles/container.developer).
+
+    The module builds the full principalSet:// member from the pool name, so callers never hardcode
+    the project number. For resource-scoped grants (a single bucket/repo), use the exported
+    principal_set_members output with the relevant IAM resource instead.
+  EOT
+  type = map(object({
+    principal_set = string
+    roles         = set(string)
+  }))
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = alltrue([for b in values(var.project_iam_bindings) : alltrue([for r in b.roles : startswith(r, "roles/")])])
+    error_message = "every project_iam_bindings role must be a role ID starting with roles/."
+  }
 }

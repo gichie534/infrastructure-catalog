@@ -8,7 +8,7 @@ output "provider_name" {
   value       = module.wif.provider_names["github"]
 }
 
-output "service_account_email" {
-  description = "Email of the CI service account the federated identity impersonates."
-  value       = google_service_account.ci.email
+output "principal_set_member" {
+  description = "The principalSet:// IAM member that was granted the project role directly."
+  value       = module.wif.principal_set_members["github_repo"]
 }

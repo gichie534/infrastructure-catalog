@@ -3,17 +3,9 @@ provider "google" {
   region  = var.region
 }
 
-# A service account the federated identity will impersonate. In a real setup this is the
-# deploy/CI identity (granted whatever it needs to push images, reach a cluster, etc.).
-resource "google_service_account" "ci" {
-  project      = var.project_id
-  account_id   = var.account_id
-  display_name = "WIF example CI service account"
-}
-
-# Federate GitHub Actions OIDC tokens to the pool and let the configured repository
-# impersonate the service account above. GitHub is used here only as a concrete example of
-# the IdP-neutral interface.
+# Federate GitHub Actions OIDC tokens to the pool and grant the configured repository a project
+# role *directly* — no intermediary service account (Google's preferred direct-WIF pattern). GitHub
+# is used here only as a concrete example of the IdP-neutral interface.
 module "wif" {
   source = "../../"
 
@@ -35,11 +27,11 @@ module "wif" {
     }
   }
 
-  service_account_bindings = {
+  project_iam_bindings = {
     github_repo = {
-      service_account_id = google_service_account.ci.id
-      # Every workflow run in the named repository may impersonate the SA.
+      # Every workflow run in the named repository gets this role directly.
       principal_set = "attribute.repository/${var.github_repository}"
+      roles         = ["roles/artifactregistry.reader"]
     }
   }
 }

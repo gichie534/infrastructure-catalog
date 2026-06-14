@@ -2,6 +2,7 @@ package test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/random"
@@ -11,8 +12,8 @@ import (
 )
 
 // TestWorkloadIdentityFederationBasic applies examples/basic (a Workload Identity Pool with a
-// GitHub OIDC provider plus a CI service-account binding) against a sandbox project, asserts on
-// the outputs, and always destroys via defer.
+// GitHub OIDC provider plus a direct project-IAM grant to the federated principalSet) against a
+// sandbox project, asserts on the outputs, and always destroys via defer.
 //
 // Requires GOOGLE_PROJECT (or GCP_PROJECT) to point at a sandbox project with
 // application-default credentials available.
@@ -25,17 +26,16 @@ func TestWorkloadIdentityFederationBasic(t *testing.T) {
 	}
 	require.NotEmpty(t, projectID, "set GOOGLE_PROJECT (or GCP_PROJECT) to a sandbox project to run this test")
 
-	// Unique suffix so repeated/parallel runs don't collide on pool or SA IDs.
-	unique := random.UniqueId()
+	// Unique suffix so repeated/parallel runs don't collide on the pool ID. pool_id only allows
+	// lowercase, so downcase the (mixed-case) random ID.
+	unique := strings.ToLower(random.UniqueId())
 	poolID := "ci-pool-" + unique
-	accountID := "wif-ci-" + unique
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
 			"project_id":        projectID,
 			"pool_id":           poolID,
-			"account_id":        accountID,
 			"github_repository": "octo-org/example-repo",
 		},
 	})
@@ -50,6 +50,8 @@ func TestWorkloadIdentityFederationBasic(t *testing.T) {
 	providerName := terraform.Output(t, terraformOptions, "provider_name")
 	assert.Contains(t, providerName, "/providers/github")
 
-	saEmail := terraform.Output(t, terraformOptions, "service_account_email")
-	assert.Contains(t, saEmail, accountID+"@")
+	// Direct WIF: the repo's principalSet is granted a project role with no service account.
+	member := terraform.Output(t, terraformOptions, "principal_set_member")
+	assert.Contains(t, member, "principalSet://iam.googleapis.com/")
+	assert.Contains(t, member, "attribute.repository/octo-org/example-repo")
 }
