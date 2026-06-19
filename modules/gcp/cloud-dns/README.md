@@ -52,6 +52,34 @@ module "dns" {
 `type` defaults to `CNAME`. This is the supported way to publish Certificate Manager validation
 CNAMEs (the ACM-in-Route53 analogue) without hitting the unknown-keys error.
 
+## Subdomain delegation (`delegate_to_parent_zone`)
+
+When this zone is a **child** of another Cloud DNS zone in the same org (e.g. `sub.example.com.`
+delegated from an existing `example.com.` zone), set `delegate_to_parent_zone` to have the module
+write the `NS` delegation record for this zone into the parent zone automatically, pointing at this
+zone's own authoritative name servers:
+
+```hcl
+module "child" {
+  source = "../cloud-dns"
+
+  project_id = "my-project"
+  name       = "sub-example"
+  dns_name   = "sub.example.com."
+  visibility = "public"
+
+  delegate_to_parent_zone = {
+    zone_name = "example-com" # the PARENT's Cloud DNS managed-zone resource name (not the domain)
+  }
+}
+```
+
+This keeps a delegated subdomain **reproducible**: GCP assigns fresh name servers every time the
+zone is created, and the NS record is rewritten in lock-step, so destroy/recreate never leaves a
+stale delegation. Leave it unset (default) for a top-level zone whose delegation lives at an external
+registrar. Set `project_id` inside the object if the parent zone is in a different project, and `ttl`
+to override the default 300s.
+
 ## external-dns
 
 If you run [external-dns](https://github.com/kubernetes-sigs/external-dns) in the cluster to manage

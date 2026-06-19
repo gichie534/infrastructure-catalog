@@ -8,6 +8,11 @@
 # A separate `validation_records` input handles records whose NAME is computed at apply time
 # (ACME / Certificate Manager DNS-authorization CNAMEs): it is keyed by a stable caller label rather
 # than the record name, so for_each stays plan-time-known.
+#
+# When `delegate_to_parent_zone` is set, the module also writes an NS record for THIS zone's dns_name
+# into an existing parent managed zone, using this zone's own authoritative name servers. That makes
+# a delegated subdomain reproducible: GCP assigns fresh name servers each time the zone is recreated,
+# and the delegation is rewritten in lock-step, so teardown/recreate never leaves a stale NS record.
 
 locals {
   # Map each relative record name to its fully-qualified name. "" is the apex (dns_name).
@@ -61,4 +66,19 @@ resource "google_dns_record_set" "validation" {
   type         = each.value.type
   ttl          = each.value.ttl
   rrdatas      = each.value.rrdatas
+}
+
+# Subdomain delegation: write an NS record for this zone's dns_name into an existing PARENT managed
+# zone, pointing at this zone's authoritative name servers. Created only when delegate_to_parent_zone
+# is set. The rrdatas come from the zone resource itself, so the delegation always tracks the current
+# name servers (reproducible across destroy/recreate).
+resource "google_dns_record_set" "delegation" {
+  count = var.delegate_to_parent_zone == null ? 0 : 1
+
+  project      = coalesce(var.delegate_to_parent_zone.project_id, var.project_id)
+  managed_zone = var.delegate_to_parent_zone.zone_name
+  name         = google_dns_managed_zone.this.dns_name
+  type         = "NS"
+  ttl          = var.delegate_to_parent_zone.ttl
+  rrdatas      = google_dns_managed_zone.this.name_servers
 }

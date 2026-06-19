@@ -22,3 +22,8 @@ output "validation_record_names" {
   description = "Map of validation-record label to the fully-qualified name actually created (echoes the input names; useful for assertions and debugging)."
   value       = { for k, r in google_dns_record_set.validation : k => r.name }
 }
+
+output "delegation_record_name" {
+  description = "The NS delegation record name written into the parent zone, or null when delegate_to_parent_zone is unset."
+  value       = var.delegate_to_parent_zone == null ? null : google_dns_record_set.delegation[0].name
+}

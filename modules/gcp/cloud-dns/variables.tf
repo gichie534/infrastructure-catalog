@@ -113,6 +113,33 @@ variable "validation_records" {
   }
 }
 
+variable "delegate_to_parent_zone" {
+  description = <<-EOT
+    Optionally delegate this (sub)zone from an existing PARENT managed zone. When set, the module
+    writes an NS record for this zone's dns_name into the named parent zone, pointing at this zone's
+    own authoritative name servers. This makes a delegated subdomain self-contained and reproducible:
+    GCP assigns fresh name servers each time the zone is recreated, and the NS delegation is rewritten
+    in lock-step, so destroy/recreate never leaves a stale delegation.
+
+    Use this when this zone is a child of another Cloud DNS zone in the same org (e.g. zone
+    "sub.example.com." delegated from the existing "example.com." zone). Leave null (default) for a
+    top-level zone whose delegation is handled at an external registrar.
+
+    - zone_name:  the parent's Cloud DNS managed-zone resource name (NOT the domain) to write the NS
+                  record into.
+    - project_id: project of the parent zone, if different from this zone's project_id (default null
+                  uses project_id).
+    - ttl:        TTL for the NS delegation record (default 300).
+  EOT
+  type = object({
+    zone_name  = string
+    project_id = optional(string)
+    ttl        = optional(number, 300)
+  })
+  nullable = true
+  default  = null
+}
+
 variable "labels" {
   description = "Labels applied to the managed zone."
   type        = map(string)
