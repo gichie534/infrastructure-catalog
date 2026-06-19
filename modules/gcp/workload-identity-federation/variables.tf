@@ -21,10 +21,15 @@ variable "pool_id" {
 }
 
 variable "pool_display_name" {
-  description = "Human-readable display name for the Workload Identity Pool."
+  description = "Human-readable display name for the Workload Identity Pool. Must be 32 characters or fewer (GCP limit)."
   type        = string
   nullable    = false
   default     = "Workload Identity Pool"
+
+  validation {
+    condition     = length(var.pool_display_name) <= 32
+    error_message = "pool_display_name must be 32 characters or fewer (GCP enforces this limit on the WorkloadIdentityPool display name)."
+  }
 }
 
 variable "pool_description" {
