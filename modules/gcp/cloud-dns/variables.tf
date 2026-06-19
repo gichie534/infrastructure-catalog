@@ -79,6 +79,40 @@ variable "records" {
   }
 }
 
+variable "validation_records" {
+  description = <<-EOT
+    Records whose NAME is computed (known only after apply) — chiefly ACME / Certificate Manager
+    DNS-authorization CNAMEs. Unlike `records` (which is keyed by the record name), this map is keyed
+    by a STABLE caller-chosen label, with the fully-qualified record name carried in the value. That
+    keeps the for_each keys known at plan time, so you can wire a certificate module's
+    dns_authorization_records straight in without Terraform complaining that the keys are unknown.
+
+    - name:    the fully-qualified record name (Certificate Manager returns an absolute FQDN, e.g.
+               "_acme-challenge.api.example.com." — trailing dot optional). Written verbatim; NOT
+               expanded against dns_name.
+    - type:    record type (typically "CNAME").
+    - ttl:     optional, default 300.
+    - rrdatas: the record values.
+
+    Example (wiring a certificate module):
+      validation_records = module.certs.dns_authorization_records  # { api = { name, type, data }, ... }
+      # if the source shape uses `data` instead of `rrdatas`, adapt with a for-expression.
+  EOT
+  type = map(object({
+    name    = string
+    type    = optional(string, "CNAME")
+    ttl     = optional(number, 300)
+    rrdatas = list(string)
+  }))
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = alltrue([for r in values(var.validation_records) : length(r.rrdatas) > 0])
+    error_message = "each validation record must have at least one entry in rrdatas."
+  }
+}
+
 variable "labels" {
   description = "Labels applied to the managed zone."
   type        = map(string)
