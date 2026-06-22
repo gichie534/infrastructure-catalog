@@ -52,7 +52,7 @@ variable "project_roles" {
 }
 
 variable "bucket_iam" {
-  description = "GCS bucket access to grant the workload GSA, as a map of arbitrary stable label => { bucket, role } (e.g. role roles/storage.objectViewer or roles/storage.objectUser). Wire bucket from the gcs-bucket module's name output. The map keys must be known at plan time. Each entry becomes a bucket-scoped IAM member."
+  description = "GCS bucket access to grant the workload GSA, as a map of arbitrary stable label => { bucket, role } (e.g. role roles/storage.objectViewer or roles/storage.objectUser). Wire bucket from the gcs module's name output. The map keys must be known at plan time. Each entry becomes a bucket-scoped IAM member."
   type = map(object({
     bucket = string
     role   = string

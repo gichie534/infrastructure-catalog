@@ -5,7 +5,7 @@ provider "google" {
 
 # A bucket to grant the KSA read access to (a producer; grants nothing itself).
 module "bucket" {
-  source = "../../../gcs-bucket"
+  source = "../../../gcs"
 
   project_id    = var.project_id
   name          = var.bucket_name

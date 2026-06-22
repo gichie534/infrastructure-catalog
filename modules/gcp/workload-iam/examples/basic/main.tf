@@ -21,7 +21,7 @@ module "api_key" {
 
 # Producer: a GCS bucket. Stays pure — just creates the bucket and exports its name.
 module "uploads" {
-  source = "../../../gcs-bucket"
+  source = "../../../gcs"
 
   project_id = var.project_id
   name       = var.bucket_name

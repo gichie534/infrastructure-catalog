@@ -33,7 +33,7 @@ variable "kubernetes_service_account" {
 }
 
 variable "bucket_iam" {
-  description = "GCS bucket access to grant the KSA principal directly, as a map of arbitrary stable label => { bucket, role } (e.g. role roles/storage.objectViewer). Wire bucket from the gcs-bucket module's name output. Map keys must be known at plan time. Each entry becomes a bucket-scoped IAM member on the KSA principal."
+  description = "GCS bucket access to grant the KSA principal directly, as a map of arbitrary stable label => { bucket, role } (e.g. role roles/storage.objectViewer). Wire bucket from the gcs module's name output. Map keys must be known at plan time. Each entry becomes a bucket-scoped IAM member on the KSA principal."
   type = map(object({
     bucket = string
     role   = string

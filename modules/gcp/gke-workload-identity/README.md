@@ -41,7 +41,7 @@ is computed once in `main.tf` and reused, so each new resource kind is a localiz
 
 ## How it fits together
 
-Producer modules stay pure: [`gcp/gcs-bucket`](../gcs-bucket) exports a bucket name. This unit takes
+Producer modules stay pure: [`gcp/gcs`](../gcs) exports a bucket name. This unit takes
 those identifiers and grants the KSA principal access. With Terragrunt, declare `dependency` blocks
 on the producer units and feed their outputs in (e.g. `bucket_iam = { allowed = { bucket =
 dependency.bucket.outputs.name, role = "roles/storage.objectViewer" } }`).
