@@ -41,5 +41,24 @@ resource "google_container_cluster" "this" {
     }
   }
 
+  # Enable the GKE-managed Secret Manager add-on (the Google-managed Secrets Store CSI Driver +
+  # GCP provider) when requested.
+  dynamic "secret_manager_config" {
+    for_each = var.enable_secret_manager_addon ? [1] : []
+    content {
+      enabled = true
+    }
+  }
+
+  # The SecretSync controller materializes Secret Manager secrets as Kubernetes Secrets so they
+  # can be referenced through standard valueFrom.secretKeyRef / envFrom. Independent from the
+  # CSI-based add-on above — either or both may be enabled.
+  dynamic "secret_sync_config" {
+    for_each = var.enable_secret_sync ? [1] : []
+    content {
+      enabled = true
+    }
+  }
+
   resource_labels = var.resource_labels
 }

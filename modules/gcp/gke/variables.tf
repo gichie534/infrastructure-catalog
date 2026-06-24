@@ -111,3 +111,17 @@ variable "resource_labels" {
   nullable    = false
   default     = {}
 }
+
+variable "enable_secret_manager_addon" {
+  description = "Enable the GKE-managed Secret Manager add-on (the Google-managed build of the Secrets Store CSI Driver and its GCP provider). When true, pods may mount Secret Manager secrets as files via a SecretProviderClass referencing the secrets-store-gke.csi.k8s.io driver. Disabled by default to keep the cluster minimal."
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
+variable "enable_secret_sync" {
+  description = "Enable the SecretSync controller (secret_sync_config) on the cluster. The controller materializes a Secret Manager secret as a Kubernetes Secret (referenced via valueFrom.secretKeyRef / envFrom) given a SecretProviderClass. This is an independent feature from enable_secret_manager_addon — either, both, or neither may be enabled, depending on whether the workload needs file mounts, env-var consumption, or both. Requires a GKE control plane version that supports the feature (1.33+ at the time of writing)."
+  type        = bool
+  nullable    = false
+  default     = false
+}
