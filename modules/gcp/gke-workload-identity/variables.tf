@@ -47,6 +47,21 @@ variable "bucket_iam" {
   }
 }
 
+variable "secret_iam" {
+  description = "Secret Manager secret access to grant the KSA principal directly, as a map of arbitrary stable label => { secret_id, role } (e.g. role roles/secretmanager.secretAccessor). Wire secret_id from the secret-manager module's secret_id output (fully-qualified projects/<project>/secrets/<name>). Map keys must be known at plan time. Each entry becomes a secret-scoped IAM member on the KSA principal."
+  type = map(object({
+    secret_id = string
+    role      = string
+  }))
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = alltrue([for s in var.secret_iam : startswith(s.role, "roles/secretmanager.")])
+    error_message = "each secret_iam role must be a Secret Manager role starting with roles/secretmanager."
+  }
+}
+
 variable "project_roles" {
   description = "Project-level IAM roles to grant the KSA principal directly (e.g. roles/logging.logWriter). Resource-scoped access (like a single bucket) is handled by its own input, not here."
   type        = set(string)

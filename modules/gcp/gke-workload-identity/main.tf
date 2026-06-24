@@ -26,6 +26,17 @@ resource "google_storage_bucket_iam_member" "this" {
   member = local.ksa_principal
 }
 
+# Grant the KSA principal access to each supplied Secret Manager secret/role pair, scoped to the
+# individual secret. secret_id must be the fully-qualified projects/<project>/secrets/<name>
+# resource ID (the secret-manager module's secret_id output).
+resource "google_secret_manager_secret_iam_member" "this" {
+  for_each = var.secret_iam
+
+  secret_id = each.value.secret_id
+  role      = each.value.role
+  member    = local.ksa_principal
+}
+
 # Grant the KSA principal project-level roles.
 resource "google_project_iam_member" "this" {
   for_each = var.project_roles
