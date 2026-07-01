@@ -73,12 +73,29 @@ tasks:
         vars: {DOCS_FLAGS: ''}
 
   test:
-    desc: 'Run Terratest (real resources). Target one module with MODULE=<provider>/<name>'
+    desc: 'Run Terratest (real resources). Runs the current module when invoked from inside one; target explicitly with MODULE=<provider>/<name>'
     cmds:
       - |
         set -eu
-        if [ -n "{{.MODULE}}" ]; then
-          target="./{{.MODULES_DIR}}/{{.MODULE}}/test/..."
+        module="{{.MODULE}}"
+
+        # Task always runs from the Taskfile dir, so `task test` invoked inside a module
+        # can't tell it's in one and would fall through to ./... (every module). When
+        # MODULE isn't given explicitly, infer it from the dir the user ran `task` from.
+        if [ -z "$module" ]; then
+          user_dir='{{.USER_WORKING_DIR}}'
+          root_dir='{{.ROOT_DIR}}'
+          rel="${user_dir#"$root_dir"/}"
+          case "$rel" in
+            {{.MODULES_DIR}}/*/*)
+              # modules/<provider>/<name>[/...] -> <provider>/<name>
+              module=$(printf '%s\n' "$rel" | cut -d/ -f2-3)
+              ;;
+          esac
+        fi
+
+        if [ -n "$module" ]; then
+          target="./{{.MODULES_DIR}}/$module/test/..."
           echo "==> go test $target"
         else
           target="./..."
