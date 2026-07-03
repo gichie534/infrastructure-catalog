@@ -8,6 +8,24 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-alb-v0.1.0
+
+Initial release of the `aws/alb` module: an Application Load Balancer with an HTTP listener, target
+groups, and path- and host-based routing rules.
+
+- **Inputs:** `name` (required, validated), `vpc_id` (required), `subnet_ids` (required, ≥2 AZs),
+  `target_groups` (required map — port/protocol/target\_type/target\_ids/health-check settings per
+  group), `listener_rules` (map — priority + target\_group\_key + path\_patterns and/or host\_headers,
+  validated to require at least one matcher), `default_target_group_key`, `internal`,
+  `enable_deletion_protection`, `listener_port`, `security_group_ids` / `create_security_group` /
+  `ingress_cidr_blocks`, `tags`.
+- **Routing:** listener evaluates rules by ascending priority and forwards to the matched target
+  group; unmatched requests forward to `default_target_group_key` or, when null, get a fixed `404`.
+- **Security group:** optionally created by the module (inbound on `listener_port` from
+  `ingress_cidr_blocks`, all egress), or supply your own via `security_group_ids`.
+- **Outputs:** `arn`, `dns_name`, `zone_id`, `security_group_id`, `target_group_arns`,
+  `target_group_names`, `listener_arn`.
+
 ## aws-autoscaling-group-v0.1.0
 
 Initial release of the `aws/autoscaling-group` module: an EC2 Auto Scaling group fronted by a
