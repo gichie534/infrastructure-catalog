@@ -11,8 +11,11 @@
 # redirected to HTTPS; only GET/HEAD are allowed (a static content distribution).
 
 locals {
-  # Managed CachingOptimized policy id — the same well-known id in every account/region.
+  # Managed CachingOptimized policy id — the same well-known id in every account/region. Used when
+  # the consumer doesn't pin a specific cache_policy_id.
   caching_optimized_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+  cache_policy_id = var.cache_policy_id != null ? var.cache_policy_id : local.caching_optimized_policy_id
 }
 
 # One Origin Access Control shared by every S3 origin. always sign + sigv4 is the S3 OAC recipe.
@@ -47,7 +50,7 @@ resource "aws_cloudfront_distribution" "this" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = local.caching_optimized_policy_id
+    cache_policy_id        = local.cache_policy_id
     compress               = true
   }
 
@@ -60,7 +63,7 @@ resource "aws_cloudfront_distribution" "this" {
       viewer_protocol_policy = "redirect-to-https"
       allowed_methods        = ["GET", "HEAD"]
       cached_methods         = ["GET", "HEAD"]
-      cache_policy_id        = local.caching_optimized_policy_id
+      cache_policy_id        = local.cache_policy_id
       compress               = true
     }
   }

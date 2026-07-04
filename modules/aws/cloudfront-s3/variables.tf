@@ -60,6 +60,19 @@ variable "ordered_cache_behaviors" {
   default  = []
 }
 
+variable "cache_policy_id" {
+  description = <<-EOT
+    Managed or custom CloudFront cache policy id applied to every cache behavior (the default and all
+    ordered behaviors). When null (the default) the module uses the AWS managed **CachingOptimized**
+    policy (`658327ea-f89d-4fab-a63d-7e88639e58f6`). To disable caching so viewers always fetch from
+    the origin, pass the managed **CachingDisabled** policy id
+    (`4135ea2d-6df8-44a3-9df3-4b5a84be39ad`).
+  EOT
+  type        = string
+  nullable    = true
+  default     = null
+}
+
 variable "default_root_object" {
   description = "Object CloudFront returns for a request to the distribution root (`/`). Set to \"\" to disable."
   type        = string

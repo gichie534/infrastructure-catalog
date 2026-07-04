@@ -35,6 +35,8 @@ so the buckets stay fully private.
 - **Inputs:** `name` (required, validated), `origins` (required map — per-origin
   `domain_name`/`origin_path`, keyed by logical origin id), `default_origin_key` (required),
   `ordered_cache_behaviors` (list of `path_pattern` -> `origin_key`, first match wins),
+  `cache_policy_id` (optional — managed/custom cache policy applied to every behavior; defaults to
+  the managed CachingOptimized policy, set to CachingDisabled to bypass caching),
   `default_root_object` (default `index.html`), `price_class` (validated enum, default
   `PriceClass_100`), `comment`, `tags`.
 - **Access model (owned by the module):** one shared Origin Access Control (`always` sign, `sigv4`)
