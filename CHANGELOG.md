@@ -26,6 +26,25 @@ groups, and path- and host-based routing rules.
 - **Outputs:** `arn`, `dns_name`, `zone_id`, `security_group_id`, `target_group_arns`,
   `target_group_names`, `listener_arn`.
 
+## aws-cloudfront-s3-v0.1.0
+
+Initial release of the `aws/cloudfront-s3` module: a CloudFront distribution that fronts one or more
+**private** S3 buckets and routes requests to them by path pattern, using Origin Access Control (OAC)
+so the buckets stay fully private.
+
+- **Inputs:** `name` (required, validated), `origins` (required map — per-origin
+  `domain_name`/`origin_path`, keyed by logical origin id), `default_origin_key` (required),
+  `ordered_cache_behaviors` (list of `path_pattern` -> `origin_key`, first match wins),
+  `default_root_object` (default `index.html`), `price_class` (validated enum, default
+  `PriceClass_100`), `comment`, `tags`.
+- **Access model (owned by the module):** one shared Origin Access Control (`always` sign, `sigv4`)
+  wired to every S3 origin; viewer requests redirected to HTTPS; `GET`/`HEAD` only with the managed
+  CachingOptimized policy on the default `*.cloudfront.net` certificate. The module does **not** own
+  the buckets or their policies — the consumer grants `s3:GetObject` to the `cloudfront.amazonaws.com`
+  principal scoped by `AWS:SourceArn = distribution_arn`.
+- **Outputs:** `distribution_id`, `distribution_arn`, `domain_name`, `hosted_zone_id`,
+  `origin_access_control_id`.
+
 ## aws-autoscaling-group-v0.1.0
 
 Initial release of the `aws/autoscaling-group` module: an EC2 Auto Scaling group fronted by a
