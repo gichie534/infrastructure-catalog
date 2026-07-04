@@ -8,6 +8,39 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-lambda-v0.1.0
+
+Initial release of the `aws/lambda` module: a Lambda function plus its execution role, with optional
+VPC attachment and a retention-managed CloudWatch log group.
+
+- **Inputs:** `name` (required, validated), `filename` (required — path to the deployment zip,
+  hashed for `source_code_hash`), `handler` (default `bootstrap`), `runtime` (default
+  `provided.al2023`), `architecture` (validated enum, default `x86_64`), `memory_size` (validated),
+  `timeout` (validated), `environment_variables`, `vpc_config` (optional object of
+  `subnet_ids`/`security_group_ids`), `additional_policy_arns`, `inline_policies`,
+  `log_retention_in_days` (default 14), `tags`.
+- **Execution role (owned by the module):** always attaches `AWSLambdaBasicExecutionRole`; when
+  `vpc_config` is set, also attaches `AWSLambdaVPCAccessExecutionRole` so the function can manage the
+  ENIs it needs to reach private VPC resources. Extra grants via `additional_policy_arns` /
+  `inline_policies`.
+- **Outputs:** `function_name`, `function_arn`, `invoke_arn`, `role_arn`, `role_name`,
+  `log_group_name`.
+
+## aws-security-group-v0.1.0
+
+Initial release of the `aws/security-group` module: a single VPC security group with
+consumer-supplied ingress/egress rules and first-class security-group-to-security-group references.
+
+- **Inputs:** `name` (required, validated), `vpc_id` (required), `description`, `ingress_rules`
+  (list — per rule `from_port`/`to_port`/`protocol` plus exactly one of `cidr_blocks` or
+  `source_security_group_id`, validated; empty by default = no inbound), `egress_rules` (same shape;
+  defaults to a single allow-all rule), `tags`.
+- **Rule model (owned by the module):** rules are managed with the current best-practice
+  `aws_vpc_security_group_ingress_rule` / `aws_vpc_security_group_egress_rule` resources (one CIDR or
+  one referenced SG per rule) rather than legacy inline blocks; a rule with multiple `cidr_blocks` is
+  expanded to one rule resource per CIDR.
+- **Outputs:** `id`, `arn`, `name`.
+
 ## aws-alb-v0.1.0
 
 Initial release of the `aws/alb` module: an Application Load Balancer with an HTTP listener, target
