@@ -8,6 +8,23 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-route53-v0.1.0
+
+Initial release of the `aws/route53` module: a single Route 53 hosted zone (public or private) plus
+its records — the AWS analogue of `gcp/cloud-dns`.
+
+- **Inputs:** `name` (required, validated domain), `visibility` (required, `public`/`private`),
+  `vpc_associations` (required non-empty for private zones, must be empty for public — validated),
+  `records` (map keyed by name relative to the zone; `""` = apex; each entry sets
+  `type`/`ttl`/`records`), `validation_records` (map keyed by a stable caller label for
+  computed-name ACM DNS-validation CNAMEs — keeps `for_each` plan-time-known), `delegate_to_parent_zone`
+  (optional object `zone_id`/`ttl` that writes this zone's `NS` record into a parent zone for
+  reproducible subdomain delegation), `comment`, `force_destroy`, `tags`.
+- **Resources (owned by the module):** one `aws_route53_zone`, one `aws_route53_record` per entry in
+  `records`, per-entry `validation_records`, and an optional `NS` delegation record.
+- **Outputs:** `zone_id`, `zone_arn`, `name`, `name_servers`, `record_fqdns`,
+  `validation_record_fqdns`, `delegation_record_name`.
+
 ## aws-lambda-v0.1.0
 
 Initial release of the `aws/lambda` module: a Lambda function plus its execution role, with optional
