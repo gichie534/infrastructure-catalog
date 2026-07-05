@@ -8,6 +8,44 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-alb-v0.3.0
+
+Adds **first-class Lambda target support** to the `aws/alb` module — backward compatible
+(instance/ip target groups are unchanged).
+
+- **Behaviour when a target group sets `target_type = "lambda"`:** the target group is created
+  without `port`/`protocol`/`vpc_id` and without an HTTP health check (all invalid for Lambda
+  targets); the module creates an `aws_lambda_permission` granting
+  `elasticloadbalancing.amazonaws.com` permission to invoke the function, and registers the function
+  (passed as the single `target_ids` entry, its ARN) with the group. Point the listener at it via
+  `default_target_group_key` or a listener rule as usual.
+- **New `target_groups` field:** `lambda_multi_value_headers_enabled` (default `false`) — send
+  headers and query-string parameters to the function as multi-value maps. Ignored for non-lambda
+  groups.
+- **Contract change (non-breaking):** `target_groups[*].port` is now optional (it is required only
+  for instance/ip groups, enforced by validation), and `target_type` is validated against
+  `instance | ip | lambda`.
+- **Example/test:** new `examples/lambda/` (ALB fronting a Lambda) and a `TestALBLambdaTarget`
+  Terratest.
+
+## aws-lambda-v0.2.0
+
+Adds an **`ignore_code_changes`** input to the `aws/lambda` module — backward compatible (default
+`false` preserves the existing Terraform-owns-code behaviour).
+
+- **New input:** `ignore_code_changes` (bool, default `false`). When `true`, Terraform creates the
+  function from the initial `filename` once and then ignores `filename`/`source_code_hash` on later
+  applies, so an external deployer (a CI pipeline running `aws lambda update-function-code`) owns
+  code rollouts without Terraform reverting them — the Lambda analogue of an ECS service that ignores
+  task-definition changes. Configuration (runtime, memory, environment, role) stays
+  Terraform-managed either way.
+- **Implementation:** selected between two count-gated `aws_lambda_function` resources (one with a
+  `lifecycle.ignore_changes` on the code) because `lifecycle` blocks can't be driven by a variable —
+  the same pattern the `ecs-fargate-service` module uses for `ignore_task_definition_changes`.
+  Outputs are unchanged and resolve through whichever variant is active.
+- **Test:** new `TestLambdaIgnoreCodeChanges` Terratest applying the `ignore_code_changes = true`
+  variant.
+
 ## aws-alb-v0.2.0
 
 Adds **optional HTTPS termination** to the `aws/alb` module — backward compatible (plain-HTTP
