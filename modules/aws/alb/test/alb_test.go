@@ -53,6 +53,36 @@ func TestALBRouting(t *testing.T) {
 	requireEventuallyStatus(t, base+"/nowhere", 404)
 }
 
+// TestALBLambdaTarget applies examples/lambda (an internet-facing ALB whose default action forwards
+// to a Lambda target), then asserts the ALB invokes the function and returns its response. It
+// exercises the module's target_type = "lambda" path (lambda target group + invoke permission +
+// registration). It always destroys via defer.
+//
+// Requires AWS credentials in the environment (and AWS_DEFAULT_REGION or the default us-east-1), and
+// a default VPC in that region.
+func TestALBLambdaTarget(t *testing.T) {
+	t.Parallel()
+
+	name := "alb-lambda-" + strings.ToLower(random.UniqueId())
+
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "../examples/lambda",
+		Vars: map[string]interface{}{
+			"name": name,
+		},
+	})
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	dnsName := terraform.Output(t, terraformOptions, "alb_dns_name")
+	assert.NotEmpty(t, dnsName)
+
+	// The ALB forwards every request to the Lambda; expect its greeting once it's serving.
+	requireEventuallyServedBy(t, "http://"+dnsName+"/", nil, "hello from lambda")
+}
+
 // requireEventuallyServedBy polls url until the response body contains want (targets need time to
 // pass health checks and register), then asserts the serving backend.
 func requireEventuallyServedBy(t *testing.T, url string, headers map[string]string, want string) {

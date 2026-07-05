@@ -97,32 +97,55 @@ variable "ssl_policy" {
 variable "target_groups" {
   description = <<-EOT
     Target groups to create, keyed by a logical name. Each value:
-      - port                  : port the targets receive traffic on.
-      - protocol              : target group protocol (default HTTP).
-      - target_type           : instance | ip | lambda (default instance).
-      - target_ids            : IDs to register (instance IDs for target_type=instance). May be empty.
-      - health_check_path     : HTTP path the health check requests (default "/").
-      - health_check_matcher  : HTTP codes considered healthy (default "200").
-      - health_check_interval : seconds between health checks (default 30).
-      - healthy_threshold     : consecutive successes before healthy (default 3).
-      - unhealthy_threshold   : consecutive failures before unhealthy (default 3).
+      - port                  : port the targets receive traffic on. Ignored for target_type=lambda.
+      - protocol              : target group protocol (default HTTP). Ignored for target_type=lambda.
+      - target_type           : instance | ip | lambda (default instance). For "lambda", pass the
+                                function ARN as the single target_ids entry; the module registers it
+                                and grants Elastic Load Balancing permission to invoke it. A lambda
+                                target group has no port/protocol/vpc_id.
+      - target_ids            : IDs to register (instance IDs for instance, IPs for ip, the function
+                                ARN for lambda). May be empty.
+      - lambda_multi_value_headers_enabled : for target_type=lambda, send headers/query params to the
+                                function as multi-value maps. Default false. Ignored otherwise.
+      - health_check_path     : HTTP path the health check requests (default "/"). Ignored for lambda
+                                (lambda target groups have health checks disabled by this module).
+      - health_check_matcher  : HTTP codes considered healthy (default "200"). Ignored for lambda.
+      - health_check_interval : seconds between health checks (default 30). Ignored for lambda.
+      - healthy_threshold     : consecutive successes before healthy (default 3). Ignored for lambda.
+      - unhealthy_threshold   : consecutive failures before unhealthy (default 3). Ignored for lambda.
   EOT
   type = map(object({
-    port                  = number
-    protocol              = optional(string, "HTTP")
-    target_type           = optional(string, "instance")
-    target_ids            = optional(list(string), [])
-    health_check_path     = optional(string, "/")
-    health_check_matcher  = optional(string, "200")
-    health_check_interval = optional(number, 30)
-    healthy_threshold     = optional(number, 3)
-    unhealthy_threshold   = optional(number, 3)
+    port                               = optional(number)
+    protocol                           = optional(string, "HTTP")
+    target_type                        = optional(string, "instance")
+    target_ids                         = optional(list(string), [])
+    lambda_multi_value_headers_enabled = optional(bool, false)
+    health_check_path                  = optional(string, "/")
+    health_check_matcher               = optional(string, "200")
+    health_check_interval              = optional(number, 30)
+    healthy_threshold                  = optional(number, 3)
+    unhealthy_threshold                = optional(number, 3)
   }))
   nullable = false
 
   validation {
     condition     = length(var.target_groups) > 0
     error_message = "at least one target group must be defined."
+  }
+
+  validation {
+    condition     = alltrue([for tg in values(var.target_groups) : contains(["instance", "ip", "lambda"], tg.target_type)])
+    error_message = "target_type must be one of: instance, ip, lambda."
+  }
+
+  validation {
+    condition     = alltrue([for tg in values(var.target_groups) : tg.target_type == "lambda" || tg.port != null])
+    error_message = "port is required for instance and ip target groups."
+  }
+
+  validation {
+    condition     = alltrue([for tg in values(var.target_groups) : tg.target_type != "lambda" || length(tg.target_ids) <= 1])
+    error_message = "a lambda target group registers a single function; provide at most one target_id (the function ARN)."
   }
 }
 

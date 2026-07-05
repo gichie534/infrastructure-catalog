@@ -42,6 +42,29 @@ terminates TLS:
 
 Leave `certificate_arn` null (the default) for plain HTTP — behaviour is unchanged.
 
+## Lambda targets
+
+Set a target group's `target_type = "lambda"` and pass the **function ARN** as its single
+`target_ids` entry to front a Lambda function with the ALB. The ALB invokes the function through the
+Lambda service (there is no network path), so a lambda target group has **no** `port`, `protocol`,
+`vpc_id`, or health check. The module also grants Elastic Load Balancing permission to invoke the
+function (`aws_lambda_permission`) and registers it with the group:
+
+```hcl
+  target_groups = {
+    app = {
+      target_type = "lambda"
+      target_ids  = [module.function.function_arn]
+    }
+  }
+
+  default_target_group_key = "app" # forward everything to the function
+```
+
+The function must return the ALB target-group response shape (`statusCode`, `statusDescription`,
+`headers`, `body`). Set `lambda_multi_value_headers_enabled = true` on the group to receive headers
+and query-string parameters as multi-value maps. See `examples/lambda/`.
+
 ## Usage
 
 ```hcl
@@ -92,11 +115,13 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [aws_lambda_permission.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission) | resource |
 | [aws_lb.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb) | resource |
 | [aws_lb_listener.http](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener) | resource |
 | [aws_lb_listener.https](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener) | resource |
 | [aws_lb_listener_rule.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener_rule) | resource |
 | [aws_lb_target_group.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
+| [aws_lb_target_group_attachment.lambda](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group_attachment) | resource |
 | [aws_lb_target_group_attachment.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group_attachment) | resource |
 | [aws_security_group.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 
@@ -118,7 +143,7 @@ No modules.
 | <a name="input_ssl_policy"></a> [ssl\_policy](#input\_ssl\_policy) | ELB security policy (TLS versions/ciphers) for the HTTPS listener. Only used when certificate\_arn is set. | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | <a name="input_subnet_ids"></a> [subnet\_ids](#input\_subnet\_ids) | Subnet IDs to place the load balancer in. An ALB requires at least two subnets in different AZs. Use public subnets for an internet-facing ALB. | `list(string)` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags applied to every taggable resource created by this module. | `map(string)` | `{}` | no |
-| <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | Target groups to create, keyed by a logical name. Each value:<br/>  - port                  : port the targets receive traffic on.<br/>  - protocol              : target group protocol (default HTTP).<br/>  - target\_type           : instance \| ip \| lambda (default instance).<br/>  - target\_ids            : IDs to register (instance IDs for target\_type=instance). May be empty.<br/>  - health\_check\_path     : HTTP path the health check requests (default "/").<br/>  - health\_check\_matcher  : HTTP codes considered healthy (default "200").<br/>  - health\_check\_interval : seconds between health checks (default 30).<br/>  - healthy\_threshold     : consecutive successes before healthy (default 3).<br/>  - unhealthy\_threshold   : consecutive failures before unhealthy (default 3). | <pre>map(object({<br/>    port                  = number<br/>    protocol              = optional(string, "HTTP")<br/>    target_type           = optional(string, "instance")<br/>    target_ids            = optional(list(string), [])<br/>    health_check_path     = optional(string, "/")<br/>    health_check_matcher  = optional(string, "200")<br/>    health_check_interval = optional(number, 30)<br/>    healthy_threshold     = optional(number, 3)<br/>    unhealthy_threshold   = optional(number, 3)<br/>  }))</pre> | n/a | yes |
+| <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | Target groups to create, keyed by a logical name. Each value:<br/>  - port                  : port the targets receive traffic on. Ignored for target\_type=lambda.<br/>  - protocol              : target group protocol (default HTTP). Ignored for target\_type=lambda.<br/>  - target\_type           : instance \| ip \| lambda (default instance). For "lambda", pass the<br/>                            function ARN as the single target\_ids entry; the module registers it<br/>                            and grants Elastic Load Balancing permission to invoke it. A lambda<br/>                            target group has no port/protocol/vpc\_id.<br/>  - target\_ids            : IDs to register (instance IDs for instance, IPs for ip, the function<br/>                            ARN for lambda). May be empty.<br/>  - lambda\_multi\_value\_headers\_enabled : for target\_type=lambda, send headers/query params to the<br/>                            function as multi-value maps. Default false. Ignored otherwise.<br/>  - health\_check\_path     : HTTP path the health check requests (default "/"). Ignored for lambda<br/>                            (lambda target groups have health checks disabled by this module).<br/>  - health\_check\_matcher  : HTTP codes considered healthy (default "200"). Ignored for lambda.<br/>  - health\_check\_interval : seconds between health checks (default 30). Ignored for lambda.<br/>  - healthy\_threshold     : consecutive successes before healthy (default 3). Ignored for lambda.<br/>  - unhealthy\_threshold   : consecutive failures before unhealthy (default 3). Ignored for lambda. | <pre>map(object({<br/>    port                               = optional(number)<br/>    protocol                           = optional(string, "HTTP")<br/>    target_type                        = optional(string, "instance")<br/>    target_ids                         = optional(list(string), [])<br/>    lambda_multi_value_headers_enabled = optional(bool, false)<br/>    health_check_path                  = optional(string, "/")<br/>    health_check_matcher               = optional(string, "200")<br/>    health_check_interval              = optional(number, 30)<br/>    healthy_threshold                  = optional(number, 3)<br/>    unhealthy_threshold                = optional(number, 3)<br/>  }))</pre> | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | ID of the VPC the load balancer and its target groups live in. | `string` | n/a | yes |
 
 ## Outputs

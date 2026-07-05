@@ -18,6 +18,14 @@ locals {
   # Listener rules (and the default forward/404) attach to the HTTPS listener when it exists,
   # otherwise to the HTTP listener.
   primary_listener_arn = local.https_enabled ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
+
+  # Lambda target groups register a single function (the ARN) and need an invoke permission before
+  # the registration; instance/ip groups register by id and don't. Split them out here so each path
+  # gets the right resources. Keyed by target-group key -> function ARN.
+  lambda_targets = {
+    for tg_key, tg in var.target_groups : tg_key => tg.target_ids[0]
+    if tg.target_type == "lambda" && length(tg.target_ids) > 0
+  }
 }
 
 resource "aws_security_group" "this" {
@@ -74,24 +82,36 @@ resource "aws_lb_target_group" "this" {
   for_each = var.target_groups
 
   name        = "${var.name}-${each.key}"
-  port        = each.value.port
-  protocol    = each.value.protocol
   target_type = each.value.target_type
-  vpc_id      = var.vpc_id
 
-  health_check {
-    path                = each.value.health_check_path
-    matcher             = each.value.health_check_matcher
-    interval            = each.value.health_check_interval
-    healthy_threshold   = each.value.healthy_threshold
-    unhealthy_threshold = each.value.unhealthy_threshold
+  # port/protocol/vpc_id are invalid on a lambda target group — the ALB invokes the function through
+  # the Lambda service, not over the network — so they are set only for instance/ip groups.
+  port     = each.value.target_type == "lambda" ? null : each.value.port
+  protocol = each.value.target_type == "lambda" ? null : each.value.protocol
+  vpc_id   = each.value.target_type == "lambda" ? null : var.vpc_id
+
+  # Only meaningful for lambda targets; leave unset otherwise.
+  lambda_multi_value_headers_enabled = each.value.target_type == "lambda" ? each.value.lambda_multi_value_headers_enabled : null
+
+  # HTTP-style health checks apply to instance/ip groups. Lambda target groups have them disabled
+  # (the default), so the function is considered healthy without a probe path.
+  dynamic "health_check" {
+    for_each = each.value.target_type == "lambda" ? [] : [1]
+    content {
+      path                = each.value.health_check_path
+      matcher             = each.value.health_check_matcher
+      interval            = each.value.health_check_interval
+      healthy_threshold   = each.value.healthy_threshold
+      unhealthy_threshold = each.value.unhealthy_threshold
+    }
   }
 
   tags = merge(var.tags, { Name = "${var.name}-${each.key}" })
 }
 
-# Register the supplied targets. Flatten target_groups -> (group, target) pairs so each registration
-# is its own resource instance keyed by "<group>:<target>".
+# Register instance/ip targets. Flatten target_groups -> (group, target) pairs so each registration
+# is its own resource instance keyed by "<group>:<target>". Lambda groups are handled separately
+# (they need an invoke permission first).
 resource "aws_lb_target_group_attachment" "this" {
   for_each = {
     for pair in flatten([
@@ -102,13 +122,35 @@ resource "aws_lb_target_group_attachment" "this" {
           target_id = target_id
           port      = tg.port
         }
-      ]
+      ] if tg.target_type != "lambda"
     ]) : pair.key => pair
   }
 
   target_group_arn = aws_lb_target_group.this[each.value.tg_key].arn
   target_id        = each.value.target_id
   port             = each.value.port
+}
+
+# Allow Elastic Load Balancing to invoke each lambda target. The registration below depends on this
+# so the permission exists before the function is attached to the target group.
+resource "aws_lambda_permission" "alb" {
+  for_each = local.lambda_targets
+
+  statement_id  = "AllowInvokeFromALB-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value
+  principal     = "elasticloadbalancing.amazonaws.com"
+  source_arn    = aws_lb_target_group.this[each.key].arn
+}
+
+# Register the lambda function (by ARN) with its target group.
+resource "aws_lb_target_group_attachment" "lambda" {
+  for_each = local.lambda_targets
+
+  target_group_arn = aws_lb_target_group.this[each.key].arn
+  target_id        = each.value
+
+  depends_on = [aws_lambda_permission.alb]
 }
 
 resource "aws_lb_listener" "http" {
