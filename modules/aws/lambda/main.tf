@@ -23,6 +23,11 @@ locals {
   ]
 
   managed_policy_arns = toset(concat(local.base_policy_arns, var.additional_policy_arns))
+
+  # Exactly one of the two function variants below is created, selected by ignore_code_changes
+  # (lifecycle.ignore_changes can't be driven by a variable, so the choice is a count). Downstream
+  # references and outputs read whichever one exists through this local.
+  function = var.ignore_code_changes ? aws_lambda_function.ignore_code[0] : aws_lambda_function.managed[0]
 }
 
 # Trust policy: only the Lambda service may assume this role.
@@ -69,7 +74,14 @@ resource "aws_cloudwatch_log_group" "this" {
   tags = var.tags
 }
 
-resource "aws_lambda_function" "this" {
+# Two function variants, one created at a time (see local.function). They are identical except that
+# `ignore_code` ignores the deployment package so an external CI deployer owns code rollouts. Keeping
+# both in sync matters — change one, change the other.
+
+# Terraform fully owns the code: a new filename/hash redeploys on apply.
+resource "aws_lambda_function" "managed" {
+  count = var.ignore_code_changes ? 0 : 1
+
   function_name = var.name
   role          = aws_iam_role.this.arn
 
@@ -106,4 +118,50 @@ resource "aws_lambda_function" "this" {
     aws_iam_role_policy_attachment.managed,
     aws_cloudwatch_log_group.this,
   ]
+}
+
+# CI owns the code: Terraform creates the function from the initial package, then ignores subsequent
+# code changes so `aws lambda update-function-code` deployments are never reverted on apply.
+resource "aws_lambda_function" "ignore_code" {
+  count = var.ignore_code_changes ? 1 : 0
+
+  function_name = var.name
+  role          = aws_iam_role.this.arn
+
+  filename         = var.filename
+  source_code_hash = filebase64sha256(var.filename)
+
+  handler       = var.handler
+  runtime       = var.runtime
+  architectures = [var.architecture]
+
+  memory_size = var.memory_size
+  timeout     = var.timeout
+
+  dynamic "environment" {
+    for_each = length(var.environment_variables) > 0 ? [1] : []
+    content {
+      variables = var.environment_variables
+    }
+  }
+
+  dynamic "vpc_config" {
+    for_each = local.in_vpc ? [var.vpc_config] : []
+    content {
+      subnet_ids         = vpc_config.value.subnet_ids
+      security_group_ids = vpc_config.value.security_group_ids
+    }
+  }
+
+  tags = var.tags
+
+  depends_on = [
+    aws_iam_role_policy_attachment.managed,
+    aws_cloudwatch_log_group.this,
+  ]
+
+  # CI owns which code is deployed; don't let Terraform revert it on the next apply.
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
 }

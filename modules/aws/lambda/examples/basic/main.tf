@@ -14,6 +14,12 @@ variable "name" {
   default     = "example-lambda"
 }
 
+variable "ignore_code_changes" {
+  description = "Whether Terraform should stop managing the deployment package after creation."
+  type        = bool
+  default     = false
+}
+
 # Zip a placeholder bootstrap so the example is self-contained and applies with no build step. This
 # proves the module creates the function/role/log group; it is not meant to be invoked. A real
 # consumer supplies a compiled Go `bootstrap` (or a package for another runtime).
@@ -32,6 +38,8 @@ module "lambda" {
 
   name     = var.name
   filename = data.archive_file.package.output_path
+
+  ignore_code_changes = var.ignore_code_changes
 
   # Defaults: handler "bootstrap", runtime "provided.al2023", no VPC.
 

@@ -19,6 +19,16 @@ Execution-role policy, chosen by context:
 Setting `vpc_config` is what lets the function reach **private** resources (RDS, an EC2 instance in
 a private subnet, etc.) over the VPC network instead of the public internet.
 
+## Who owns the code (`ignore_code_changes`)
+
+By default Terraform owns the deployment package: a new `filename` (or a changed hash) redeploys the
+code on the next apply. Set **`ignore_code_changes = true`** to have Terraform create the function
+once and then stop managing the code — it ignores `filename`/`source_code_hash` on later applies, so
+an external deployer (a CI pipeline running `aws lambda update-function-code`) owns rollouts and
+Terraform never reverts a deployed version. This is the Lambda analogue of an ECS service that
+ignores task-definition changes. Configuration (runtime, memory, environment, role) stays
+Terraform-managed either way.
+
 ## Usage
 
 ```hcl
@@ -72,7 +82,8 @@ No modules.
 | [aws_iam_role.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.inline](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy_attachment.managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
-| [aws_lambda_function.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
+| [aws_lambda_function.ignore_code](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
+| [aws_lambda_function.managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
 | [aws_iam_policy_document.assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 
 ## Inputs
@@ -84,6 +95,7 @@ No modules.
 | <a name="input_environment_variables"></a> [environment\_variables](#input\_environment\_variables) | Environment variables passed to the function. Empty by default (no environment block created). | `map(string)` | `{}` | no |
 | <a name="input_filename"></a> [filename](#input\_filename) | Path to the deployment package (.zip) containing the function code. The consumer builds this; the module hashes it for source\_code\_hash so updates redeploy. | `string` | n/a | yes |
 | <a name="input_handler"></a> [handler](#input\_handler) | Function entrypoint. For the Go (provided.al2023) runtime this is the executable name in the zip (e.g. bootstrap). | `string` | `"bootstrap"` | no |
+| <a name="input_ignore_code_changes"></a> [ignore\_code\_changes](#input\_ignore\_code\_changes) | When true, Terraform creates the function from `filename` once and then stops managing the code:<br/>it ignores changes to the deployment package (`filename`/`source_code_hash`) on subsequent<br/>applies. This hands ownership of code rollouts to an external deployer (a CI pipeline running<br/>`aws lambda update-function-code`) — the Lambda analogue of an ECS service that ignores task<br/>definition changes — so Terraform never reverts a deployed version. Configuration (runtime,<br/>memory, environment, role, …) is still Terraform-managed either way.<br/><br/>When false (default) Terraform fully owns the code: a new `filename`/hash redeploys on apply. | `bool` | `false` | no |
 | <a name="input_inline_policies"></a> [inline\_policies](#input\_inline\_policies) | Map of inline least-privilege policies to embed in the execution role, keyed by policy name. Each value is a JSON IAM policy document. Empty by default. | `map(string)` | `{}` | no |
 | <a name="input_log_retention_in_days"></a> [log\_retention\_in\_days](#input\_log\_retention\_in\_days) | Retention for the function's CloudWatch log group. Default 14 days keeps lab logs from accumulating indefinitely. | `number` | `14` | no |
 | <a name="input_memory_size"></a> [memory\_size](#input\_memory\_size) | Memory (MB) allocated to the function. CPU scales with memory. | `number` | `128` | no |

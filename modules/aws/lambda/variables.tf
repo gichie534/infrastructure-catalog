@@ -107,6 +107,22 @@ variable "log_retention_in_days" {
   default     = 14
 }
 
+variable "ignore_code_changes" {
+  description = <<-EOT
+    When true, Terraform creates the function from `filename` once and then stops managing the code:
+    it ignores changes to the deployment package (`filename`/`source_code_hash`) on subsequent
+    applies. This hands ownership of code rollouts to an external deployer (a CI pipeline running
+    `aws lambda update-function-code`) — the Lambda analogue of an ECS service that ignores task
+    definition changes — so Terraform never reverts a deployed version. Configuration (runtime,
+    memory, environment, role, …) is still Terraform-managed either way.
+
+    When false (default) Terraform fully owns the code: a new `filename`/hash redeploys on apply.
+  EOT
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
 variable "tags" {
   description = "Tags applied to the function, execution role, and log group."
   type        = map(string)
