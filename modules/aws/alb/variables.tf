@@ -68,6 +68,32 @@ variable "listener_port" {
   default     = 80
 }
 
+variable "certificate_arn" {
+  description = <<-EOT
+    ARN of an ACM certificate. When set, the module adds an HTTPS listener on https_listener_port
+    (default 443) using this certificate, and the HTTP listener on listener_port becomes a permanent
+    (301) redirect to HTTPS instead of serving traffic. Listener rules and the default action then
+    attach to the HTTPS listener. When null (default) the module is plain HTTP as before.
+  EOT
+  type        = string
+  nullable    = true
+  default     = null
+}
+
+variable "https_listener_port" {
+  description = "Port the HTTPS listener accepts traffic on. Only used when certificate_arn is set."
+  type        = number
+  nullable    = false
+  default     = 443
+}
+
+variable "ssl_policy" {
+  description = "ELB security policy (TLS versions/ciphers) for the HTTPS listener. Only used when certificate_arn is set."
+  type        = string
+  nullable    = false
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+}
+
 variable "target_groups" {
   description = <<-EOT
     Target groups to create, keyed by a logical name. Each value:

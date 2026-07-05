@@ -29,6 +29,11 @@ output "target_group_names" {
 }
 
 output "listener_arn" {
-  description = "ARN of the HTTP listener."
+  description = "ARN of the HTTP listener (a redirect-to-HTTPS listener when certificate_arn is set, otherwise the traffic-serving listener)."
   value       = aws_lb_listener.http.arn
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener, or null when no certificate_arn was supplied."
+  value       = local.https_enabled ? aws_lb_listener.https[0].arn : null
 }

@@ -8,6 +8,86 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-alb-v0.2.0
+
+Adds **optional HTTPS termination** to the `aws/alb` module — backward compatible (plain-HTTP
+behaviour is unchanged when the new inputs are unset).
+
+- **New inputs:** `certificate_arn` (ACM cert ARN; when set, the module adds an HTTPS listener and
+  turns the HTTP listener into a 301 redirect to HTTPS), `https_listener_port` (default `443`),
+  `ssl_policy` (default `ELBSecurityPolicy-TLS13-1-2-2021-06`).
+- **Behaviour when `certificate_arn` is set:** an `aws_lb_listener` on `https_listener_port`
+  terminates TLS with the certificate; the port-`80` listener becomes a permanent redirect to HTTPS;
+  listener rules and the default action attach to the HTTPS listener; the module-created security
+  group also opens the HTTPS port.
+- **New output:** `https_listener_arn` (null when no certificate is supplied).
+
+## aws-ecs-fargate-service-v0.1.0
+
+Initial release of the `aws/ecs-fargate-service` module: a Fargate service plus everything one
+containerised workload needs — task definition, service, execution + task IAM roles, a CloudWatch log
+group, and an optional task security group. Wire it behind an ALB via `target_group_arn`.
+
+- **Inputs:** `name` (required, validated), `cluster_arn` (required), `container_image` (required),
+  `container_name` (default `app`), `container_port` (default `8080`), `cpu`/`memory` (Fargate combo,
+  default 256/512), `cpu_architecture` (validated enum, default `X86_64`), `desired_count`,
+  `subnet_ids` (required), `assign_public_ip`, `vpc_id` (required only when creating the SG —
+  cross-variable validated), `security_group_ids` / `create_security_group` /
+  `ingress_security_group_ids`, `target_group_arn` (optional — no LB when null),
+  `health_check_grace_period_seconds`, `environment`, `execution_policy_arns` / `task_policy_arns`,
+  `log_retention_in_days`, `enable_execute_command`, `ignore_task_definition_changes` (default true),
+  `tags`.
+- **Deployment ownership:** by default the service ignores `task_definition` and `desired_count`
+  changes so an external CI deployer owns rolling deployments (registers new task-def revisions)
+  without Terraform reverting the image. Implemented as two count-gated service resources because
+  `lifecycle.ignore_changes` cannot be dynamic. Set the flag false for full Terraform management.
+- **IAM (owned by the module):** an execution role with `AmazonECSTaskExecutionRolePolicy` (pull
+  image, write logs) plus extra `execution_policy_arns`, and a separate task role for the app with
+  `task_policy_arns`.
+- **Outputs:** `service_name`, `service_id`, `task_definition_arn`, `task_definition_family`,
+  `container_name`, `container_port`, `execution_role_arn`, `task_role_arn`, `security_group_id`,
+  `log_group_name`.
+
+## aws-ecs-cluster-v0.1.0
+
+Initial release of the `aws/ecs-cluster` module: a serverless (Fargate) ECS cluster and its capacity
+providers — the grouping that services and tasks run in.
+
+- **Inputs:** `name` (required, validated), `enable_container_insights` (default false),
+  `capacity_providers` (validated subset of `FARGATE`/`FARGATE_SPOT`, default both),
+  `default_capacity_provider` (default `FARGATE`), `tags`.
+- **Resources (owned by the module):** one `aws_ecs_cluster` and an
+  `aws_ecs_cluster_capacity_providers` with a default strategy.
+- **Outputs:** `cluster_arn`, `cluster_name`, `cluster_id`.
+
+## aws-ecr-v0.1.0
+
+Initial release of the `aws/ecr` module: a single ECR repository to store an application's images —
+the AWS analogue of a `gcp/artifact-registry` repo.
+
+- **Inputs:** `name` (required, validated), `image_tag_mutability` (validated enum, default
+  `MUTABLE`), `scan_on_push` (default true), `force_delete` (default false),
+  `untagged_image_expiry_days` (optional — attaches a lifecycle policy expiring untagged images),
+  `tags`.
+- **Security baseline (owned by the module):** encryption at rest (`AES256`) and scan-on-push. Access
+  (push/pull) is left to IAM — scope a CI role to the repo's ARN.
+- **Outputs:** `repository_url`, `arn`, `name`, `registry_id`.
+
+## aws-acm-certificate-v0.1.0
+
+Initial release of the `aws/acm-certificate` module: a public, DNS-validated ACM certificate whose
+validation records are written into a Route 53 hosted zone the caller owns, blocking until the
+certificate is ISSUED.
+
+- **Inputs:** `domain_name` (required, validated, wildcard allowed), `subject_alternative_names`
+  (default empty), `hosted_zone_id` (required — the zone to validate in), `validation_record_ttl`
+  (default 60), `key_algorithm` (optional), `tags`.
+- **Resources (owned by the module):** one `aws_acm_certificate` (DNS validation,
+  `create_before_destroy`), a deduped `aws_route53_record` per validation option, and an
+  `aws_acm_certificate_validation` that waits for issuance.
+- **Outputs:** `certificate_arn` (from the validation resource, so reading it guarantees the cert is
+  ready), `domain_name`, `status`, `validation_record_fqdns`.
+
 ## aws-route53-v0.1.0
 
 Initial release of the `aws/route53` module: a single Route 53 hosted zone (public or private) plus
