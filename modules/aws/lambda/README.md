@@ -84,6 +84,8 @@ No modules.
 | [aws_iam_role_policy_attachment.managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_lambda_function.ignore_code](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
 | [aws_lambda_function.managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
+| [aws_lambda_function_url.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function_url) | resource |
+| [aws_lambda_permission.function_url](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission) | resource |
 | [aws_iam_policy_document.assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 
 ## Inputs
@@ -92,11 +94,15 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_additional_policy_arns"></a> [additional\_policy\_arns](#input\_additional\_policy\_arns) | ARNs of extra managed policies to attach to the execution role, on top of the basic (and, in a VPC, VPC-access) execution policies. Empty by default. | `list(string)` | `[]` | no |
 | <a name="input_architecture"></a> [architecture](#input\_architecture) | Instruction set architecture: x86\_64 or arm64. | `string` | `"x86_64"` | no |
+| <a name="input_create_function_url"></a> [create\_function\_url](#input\_create\_function\_url) | Create a Lambda Function URL — a dedicated HTTPS endpoint that invokes the function directly<br/>(no API Gateway). Default false. When true with function\_url\_authorization\_type = NONE the<br/>endpoint is PUBLIC (unauthenticated); the module adds the required public-invoke permission. | `bool` | `false` | no |
 | <a name="input_environment_variables"></a> [environment\_variables](#input\_environment\_variables) | Environment variables passed to the function. Empty by default (no environment block created). | `map(string)` | `{}` | no |
 | <a name="input_filename"></a> [filename](#input\_filename) | Path to the deployment package (.zip) containing the function code. The consumer builds this; the module hashes it for source\_code\_hash so updates redeploy. | `string` | n/a | yes |
+| <a name="input_function_url_authorization_type"></a> [function\_url\_authorization\_type](#input\_function\_url\_authorization\_type) | Auth for the Function URL: NONE (public) or AWS\_IAM (SigV4-signed callers). Only used when create\_function\_url is true. | `string` | `"NONE"` | no |
+| <a name="input_function_url_cors"></a> [function\_url\_cors](#input\_function\_url\_cors) | Optional CORS configuration for the Function URL (only applies when create\_function\_url is true).<br/>Null (default) creates the URL with no CORS block. Set it to allow browser calls from other<br/>origins — e.g. { allow\_methods = ["GET"], allow\_origins = ["*"] }. | <pre>object({<br/>    allow_credentials = optional(bool, false)<br/>    allow_headers     = optional(list(string), ["*"])<br/>    allow_methods     = optional(list(string), ["*"])<br/>    allow_origins     = optional(list(string), ["*"])<br/>    expose_headers    = optional(list(string), [])<br/>    max_age           = optional(number, 0)<br/>  })</pre> | `null` | no |
 | <a name="input_handler"></a> [handler](#input\_handler) | Function entrypoint. For the Go (provided.al2023) runtime this is the executable name in the zip (e.g. bootstrap). | `string` | `"bootstrap"` | no |
 | <a name="input_ignore_code_changes"></a> [ignore\_code\_changes](#input\_ignore\_code\_changes) | When true, Terraform creates the function from `filename` once and then stops managing the code:<br/>it ignores changes to the deployment package (`filename`/`source_code_hash`) on subsequent<br/>applies. This hands ownership of code rollouts to an external deployer (a CI pipeline running<br/>`aws lambda update-function-code`) — the Lambda analogue of an ECS service that ignores task<br/>definition changes — so Terraform never reverts a deployed version. Configuration (runtime,<br/>memory, environment, role, …) is still Terraform-managed either way.<br/><br/>When false (default) Terraform fully owns the code: a new `filename`/hash redeploys on apply. | `bool` | `false` | no |
 | <a name="input_inline_policies"></a> [inline\_policies](#input\_inline\_policies) | Map of inline least-privilege policies to embed in the execution role, keyed by policy name. Each value is a JSON IAM policy document. Empty by default. | `map(string)` | `{}` | no |
+| <a name="input_layers"></a> [layers](#input\_layers) | ARNs of Lambda layers to attach to the function (e.g. a Pillow layer for image processing). Empty by default (no layers). | `list(string)` | `[]` | no |
 | <a name="input_log_retention_in_days"></a> [log\_retention\_in\_days](#input\_log\_retention\_in\_days) | Retention for the function's CloudWatch log group. Default 14 days keeps lab logs from accumulating indefinitely. | `number` | `14` | no |
 | <a name="input_memory_size"></a> [memory\_size](#input\_memory\_size) | Memory (MB) allocated to the function. CPU scales with memory. | `number` | `128` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the Lambda function. Also used to name its execution role (<name>-exec) and log group (/aws/lambda/<name>). | `string` | n/a | yes |
@@ -111,6 +117,7 @@ No modules.
 | ---- | ----------- |
 | <a name="output_function_arn"></a> [function\_arn](#output\_function\_arn) | ARN of the Lambda function. |
 | <a name="output_function_name"></a> [function\_name](#output\_function\_name) | Name of the Lambda function. |
+| <a name="output_function_url"></a> [function\_url](#output\_function\_url) | HTTPS Function URL endpoint (with a trailing slash), or null when create\_function\_url is false. |
 | <a name="output_invoke_arn"></a> [invoke\_arn](#output\_invoke\_arn) | ARN to be used for invoking the function (e.g. from API Gateway integrations). |
 | <a name="output_log_group_name"></a> [log\_group\_name](#output\_log\_group\_name) | Name of the CloudWatch log group receiving the function's logs. |
 | <a name="output_role_arn"></a> [role\_arn](#output\_role\_arn) | ARN of the function's execution role. Attach further permissions to it if needed. |

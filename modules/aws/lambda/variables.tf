@@ -86,6 +86,53 @@ variable "vpc_config" {
   default = null
 }
 
+variable "layers" {
+  description = "ARNs of Lambda layers to attach to the function (e.g. a Pillow layer for image processing). Empty by default (no layers)."
+  type        = list(string)
+  nullable    = false
+  default     = []
+}
+
+variable "create_function_url" {
+  description = <<-EOT
+    Create a Lambda Function URL — a dedicated HTTPS endpoint that invokes the function directly
+    (no API Gateway). Default false. When true with function_url_authorization_type = NONE the
+    endpoint is PUBLIC (unauthenticated); the module adds the required public-invoke permission.
+  EOT
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
+variable "function_url_authorization_type" {
+  description = "Auth for the Function URL: NONE (public) or AWS_IAM (SigV4-signed callers). Only used when create_function_url is true."
+  type        = string
+  nullable    = false
+  default     = "NONE"
+
+  validation {
+    condition     = contains(["NONE", "AWS_IAM"], var.function_url_authorization_type)
+    error_message = "function_url_authorization_type must be one of: NONE, AWS_IAM."
+  }
+}
+
+variable "function_url_cors" {
+  description = <<-EOT
+    Optional CORS configuration for the Function URL (only applies when create_function_url is true).
+    Null (default) creates the URL with no CORS block. Set it to allow browser calls from other
+    origins — e.g. { allow_methods = ["GET"], allow_origins = ["*"] }.
+  EOT
+  type = object({
+    allow_credentials = optional(bool, false)
+    allow_headers     = optional(list(string), ["*"])
+    allow_methods     = optional(list(string), ["*"])
+    allow_origins     = optional(list(string), ["*"])
+    expose_headers    = optional(list(string), [])
+    max_age           = optional(number, 0)
+  })
+  default = null
+}
+
 variable "additional_policy_arns" {
   description = "ARNs of extra managed policies to attach to the execution role, on top of the basic (and, in a VPC, VPC-access) execution policies. Empty by default."
   type        = list(string)

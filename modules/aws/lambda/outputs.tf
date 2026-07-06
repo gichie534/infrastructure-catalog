@@ -27,3 +27,8 @@ output "log_group_name" {
   description = "Name of the CloudWatch log group receiving the function's logs."
   value       = aws_cloudwatch_log_group.this.name
 }
+
+output "function_url" {
+  description = "HTTPS Function URL endpoint (with a trailing slash), or null when create_function_url is false."
+  value       = var.create_function_url ? aws_lambda_function_url.this[0].function_url : null
+}

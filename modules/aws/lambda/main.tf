@@ -91,6 +91,7 @@ resource "aws_lambda_function" "managed" {
   handler       = var.handler
   runtime       = var.runtime
   architectures = [var.architecture]
+  layers        = length(var.layers) > 0 ? var.layers : null
 
   memory_size = var.memory_size
   timeout     = var.timeout
@@ -134,6 +135,7 @@ resource "aws_lambda_function" "ignore_code" {
   handler       = var.handler
   runtime       = var.runtime
   architectures = [var.architecture]
+  layers        = length(var.layers) > 0 ? var.layers : null
 
   memory_size = var.memory_size
   timeout     = var.timeout
@@ -164,4 +166,37 @@ resource "aws_lambda_function" "ignore_code" {
   lifecycle {
     ignore_changes = [filename, source_code_hash]
   }
+}
+
+# Optional Lambda Function URL — a dedicated HTTPS endpoint that invokes the function directly, no
+# API Gateway. Created only when create_function_url is true. With authorization_type NONE the URL is
+# public, so the module also adds the lambda:InvokeFunctionUrl permission for the `*` principal
+# (scoped to NONE auth) that public access requires; AWS_IAM auth relies on the caller's SigV4.
+resource "aws_lambda_function_url" "this" {
+  count = var.create_function_url ? 1 : 0
+
+  function_name      = local.function.function_name
+  authorization_type = var.function_url_authorization_type
+
+  dynamic "cors" {
+    for_each = var.function_url_cors != null ? [var.function_url_cors] : []
+    content {
+      allow_credentials = cors.value.allow_credentials
+      allow_headers     = cors.value.allow_headers
+      allow_methods     = cors.value.allow_methods
+      allow_origins     = cors.value.allow_origins
+      expose_headers    = cors.value.expose_headers
+      max_age           = cors.value.max_age
+    }
+  }
+}
+
+resource "aws_lambda_permission" "function_url" {
+  count = var.create_function_url && var.function_url_authorization_type == "NONE" ? 1 : 0
+
+  statement_id           = "FunctionURLAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = local.function.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }
