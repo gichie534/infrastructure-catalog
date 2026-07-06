@@ -32,6 +32,24 @@ variable "bucket_policy" {
   default     = null
 }
 
+variable "cors_rules" {
+  description = <<-EOT
+    Optional CORS rules for the bucket. Empty (default) creates no CORS configuration. Each rule sets
+    the allowed methods and origins (required) plus optional allowed/exposed headers and a max age.
+    Typically needed so a browser can PUT directly to a presigned upload URL from a web page served on
+    a different origin.
+  EOT
+  type = list(object({
+    allowed_headers = optional(list(string), [])
+    allowed_methods = list(string)
+    allowed_origins = list(string)
+    expose_headers  = optional(list(string), [])
+    max_age_seconds = optional(number, 3600)
+  }))
+  nullable = false
+  default  = []
+}
+
 variable "tags" {
   description = "Tags applied to the S3 bucket."
   type        = map(string)

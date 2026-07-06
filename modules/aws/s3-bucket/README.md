@@ -68,16 +68,16 @@ module "s3_bucket" {
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-| Name                                                                      | Version |
-| ------------------------------------------------------------------------- | ------- |
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0  |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws)                   | >= 5.0  |
+| Name | Version |
+| ---- | ------- |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.0 |
 
 ## Providers
 
-| Name                                              | Version |
-| ------------------------------------------------- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.53.0  |
+| Name | Version |
+| ---- | ------- |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.53.0 |
 
 ## Modules
 
@@ -85,27 +85,29 @@ No modules.
 
 ## Resources
 
-| Name                                                                                                                                                                                  | Type     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket)                                                                           | resource |
-| [aws_s3_bucket_ownership_controls.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_ownership_controls)                                     | resource |
-| [aws_s3_bucket_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy)                                                             | resource |
-| [aws_s3_bucket_public_access_block.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block)                                   | resource |
+| Name | Type |
+| ---- | ---- |
+| [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket_cors_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_cors_configuration) | resource |
+| [aws_s3_bucket_ownership_controls.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_ownership_controls) | resource |
+| [aws_s3_bucket_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_public_access_block.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 
 ## Inputs
 
-| Name                                                                        | Description                                                                                                                                                                                                                                                                                                                                                                    | Type          | Default | Required |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- | ------- | :------: |
-| <a name="input_bucket_name"></a> [bucket\_name](#input\_bucket\_name)       | Name of the S3 bucket. Must be globally unique and DNS-compliant (3-63 chars, lowercase letters, numbers, dots, and hyphens; start/end alphanumeric).                                                                                                                                                                                                                          | `string`      | n/a     |   yes    |
-| <a name="input_bucket_policy"></a> [bucket\_policy](#input\_bucket\_policy) | Optional bucket policy as a JSON string. When set, the module attaches it via an<br/>`aws_s3_bucket_policy` — the raw passthrough mirrors how `iam-instance-profile` takes inline<br/>policies. Typically produced from an `aws_iam_policy_document` data source (e.g. an ABAC policy<br/>matching `aws:PrincipalTag/*`). When null (the default) no bucket policy is created. | `string`      | `null`  |    no    |
-| <a name="input_force_destroy"></a> [force\_destroy](#input\_force\_destroy) | Whether to allow Terraform to delete the bucket even when it still contains objects. Leave `false`<br/>for anything you care about; set `true` in throwaway lab environments so `terraform destroy`<br/>tears down cleanly without a manual empty step.                                                                                                                        | `bool`        | `false` |    no    |
-| <a name="input_tags"></a> [tags](#input\_tags)                              | Tags applied to the S3 bucket.                                                                                                                                                                                                                                                                                                                                                 | `map(string)` | `{}`    |    no    |
+| Name | Description | Type | Default | Required |
+| ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_bucket_name"></a> [bucket\_name](#input\_bucket\_name) | Name of the S3 bucket. Must be globally unique and DNS-compliant (3-63 chars, lowercase letters, numbers, dots, and hyphens; start/end alphanumeric). | `string` | n/a | yes |
+| <a name="input_bucket_policy"></a> [bucket\_policy](#input\_bucket\_policy) | Optional bucket policy as a JSON string. When set, the module attaches it via an<br/>`aws_s3_bucket_policy` — the raw passthrough mirrors how `iam-instance-profile` takes inline<br/>policies. Typically produced from an `aws_iam_policy_document` data source (e.g. an ABAC policy<br/>matching `aws:PrincipalTag/*`). When null (the default) no bucket policy is created. | `string` | `null` | no |
+| <a name="input_cors_rules"></a> [cors\_rules](#input\_cors\_rules) | Optional CORS rules for the bucket. Empty (default) creates no CORS configuration. Each rule sets<br/>the allowed methods and origins (required) plus optional allowed/exposed headers and a max age.<br/>Typically needed so a browser can PUT directly to a presigned upload URL from a web page served on<br/>a different origin. | <pre>list(object({<br/>    allowed_headers = optional(list(string), [])<br/>    allowed_methods = list(string)<br/>    allowed_origins = list(string)<br/>    expose_headers  = optional(list(string), [])<br/>    max_age_seconds = optional(number, 3600)<br/>  }))</pre> | `[]` | no |
+| <a name="input_force_destroy"></a> [force\_destroy](#input\_force\_destroy) | Whether to allow Terraform to delete the bucket even when it still contains objects. Leave `false`<br/>for anything you care about; set `true` in throwaway lab environments so `terraform destroy`<br/>tears down cleanly without a manual empty step. | `bool` | `false` | no |
+| <a name="input_tags"></a> [tags](#input\_tags) | Tags applied to the S3 bucket. | `map(string)` | `{}` | no |
 
 ## Outputs
 
-| Name                                                   | Description                                                                             |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| <a name="output_arn"></a> [arn](#output\_arn)          | ARN of the S3 bucket. Use it to scope IAM/bucket policy resources (e.g. arn and arn/*). |
-| <a name="output_bucket"></a> [bucket](#output\_bucket) | Name (id) of the S3 bucket.                                                             |
+| Name | Description |
+| ---- | ----------- |
+| <a name="output_arn"></a> [arn](#output\_arn) | ARN of the S3 bucket. Use it to scope IAM/bucket policy resources (e.g. arn and arn/*). |
+| <a name="output_bucket"></a> [bucket](#output\_bucket) | Name (id) of the S3 bucket. |
 <!-- END_TF_DOCS -->

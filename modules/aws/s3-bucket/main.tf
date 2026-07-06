@@ -45,6 +45,26 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
+# Optional CORS configuration. Only created when cors_rules is non-empty. Needed when a browser makes
+# cross-origin requests directly to the bucket — e.g. a PUT to a presigned upload URL from a web page
+# served on a different origin.
+resource "aws_s3_bucket_cors_configuration" "this" {
+  count = length(var.cors_rules) > 0 ? 1 : 0
+
+  bucket = aws_s3_bucket.this.id
+
+  dynamic "cors_rule" {
+    for_each = var.cors_rules
+    content {
+      allowed_headers = cors_rule.value.allowed_headers
+      allowed_methods = cors_rule.value.allowed_methods
+      allowed_origins = cors_rule.value.allowed_origins
+      expose_headers  = cors_rule.value.expose_headers
+      max_age_seconds = cors_rule.value.max_age_seconds
+    }
+  }
+}
+
 # Optional raw bucket policy (e.g. an ABAC policy). Only created when a policy string is supplied.
 # Depends on the public access block so BlockPublicPolicy is in force before the policy is evaluated.
 resource "aws_s3_bucket_policy" "this" {
