@@ -8,6 +8,40 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-lambda-v0.3.0
+
+Adds **Lambda Function URL** and **layer** support to the `aws/lambda` module — backward compatible
+(both are opt-in; existing functions are unchanged).
+
+- **New inputs:** `layers` (list of layer ARNs, default `[]` — e.g. a Pillow layer);
+  `create_function_url` (bool, default `false`); `function_url_authorization_type` (`NONE` |
+  `AWS_IAM`, default `NONE`); `function_url_cors` (optional CORS object, default `null`).
+- **Behaviour when `create_function_url = true`:** the module creates an `aws_lambda_function_url`
+  (with the optional CORS block), and — when auth is `NONE` — the `aws_lambda_permission`
+  (`lambda:InvokeFunctionUrl`, principal `*`, `function_url_auth_type = NONE`) that public access
+  requires.
+- **New output:** `function_url` (the HTTPS endpoint, or `null` when not created).
+
+## aws-s3-bucket-v0.2.0
+
+Adds optional **CORS rules** to the `aws/s3-bucket` module — backward compatible (no CORS
+configuration is created when the new input is unset).
+
+- **New input:** `cors_rules` (list of CORS-rule objects, default `[]`). When non-empty the module
+  creates an `aws_s3_bucket_cors_configuration`. Each rule sets `allowed_methods` and
+  `allowed_origins` (required) plus optional `allowed_headers`, `expose_headers`, and
+  `max_age_seconds`. Typically needed so a browser can PUT directly to a presigned upload URL.
+
+## aws-dynamodb-v0.1.0
+
+New **`aws/dynamodb`** module — a single DynamoDB table.
+
+- On-demand (`PAY_PER_REQUEST`) by default; `PROVISIONED` with `read_capacity`/`write_capacity`
+  supported and validated. Inputs: `name`, `hash_key`(+type), optional `range_key`(+type),
+  `billing_mode`, `point_in_time_recovery_enabled`, `deletion_protection_enabled`, `tags`.
+- Owns only the table (no IAM) — consumers grant item access via the `arn` output. Outputs: `name`,
+  `arn`, `id`, `stream_arn`. Ships with `examples/basic/` and a `TestDynamoDBBasic` Terratest.
+
 ## aws-alb-v0.3.0
 
 Adds **first-class Lambda target support** to the `aws/alb` module — backward compatible
