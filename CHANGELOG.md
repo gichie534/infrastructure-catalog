@@ -8,6 +8,71 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-argocd-v0.1.0
+
+New **`gcp/argocd`** module — installs **Argo CD** onto an existing (GKE) cluster from the community
+`argo-cd` Helm chart and optionally **bootstraps GitOps** with a single root **app-of-apps**
+`Application` (via the `argocd-apps` chart) that points Argo CD at a Git path it then self-manages.
+
+- **Owns only Helm releases.** Declares the `helm` provider requirement but never configures it —
+  the consumer points the provider at the target cluster (module purity).
+- **Inputs:** `chart_version`, `server_domain` (required); `namespace` (default `argocd`),
+  `release_name`, `high_availability` (redis-ha + replicas; needs ≥3 nodes), `server_insecure`
+  (default `true` — TLS terminated upstream), `server_service_annotations` (e.g. the
+  `cloud.google.com/neg` annotation for container-native GKE ingress), `labels`, `helm_values`
+  (raw-YAML escape hatch), and the bootstrap set: `bootstrap_enabled` (default `true`),
+  `argocd_apps_chart_version`, `bootstrap_app_name`, `bootstrap_repo_url`, `bootstrap_path`,
+  `bootstrap_target_revision`, `bootstrap_helm_parameters` (thread the env-specific hostname into the
+  GitOps-rendered manifests), `bootstrap_auto_sync`.
+- **Ingress is delivered via GitOps, not Terraform.** The Argo CD `Ingress` / `ManagedCertificate` /
+  `FrontendConfig` are synced from the bootstrap path so Argo CD manages its own front door, and the
+  module avoids `kubernetes_manifest` dry-runs against CRDs that only exist post-install.
+- **Outputs:** `namespace`, `release_name`, `chart_version`, `server_service_name`,
+  `initial_admin_secret_name`, `bootstrap_application_name`.
+- Ships `examples/basic/` (installs onto an existing cluster, no bootstrap) and a skip-guarded
+  `TestArgoCDBasic` Terratest (targets a pre-existing sandbox cluster).
+
+## gcp-host-project-v0.1.0
+
+New **`gcp/host-project`** module — a GCP project nominated as a Shared VPC **host**. It is the base
+`gcp/project` (project + API enablement) plus a single `google_compute_shared_vpc_host_project`,
+packaged separately so "this project is a host" needs no conditional.
+
+- **Inputs:** `name`, `project_id`, `folder_id` (required); `billing_account`, `labels`,
+  `activate_apis` (default `["compute.googleapis.com"]`, validated to include it), `deletion_policy`.
+- **Resources:** `google_project`, `google_project_service` (per API), and
+  `google_compute_shared_vpc_host_project` (depends on the Compute API).
+- **Outputs:** `project_id`, `project_number`, `name`, `host_project_id`.
+- Org-level module (like `gcp/project`/`gcp/folder`), so it ships no `examples/`/Terratest; enabling
+  a host requires `roles/compute.xpnAdmin`.
+
+## gcp-service-project-v0.1.0
+
+New **`gcp/service-project`** module — a GCP project attached to a Shared VPC host as a **service**
+project. Base `gcp/project` plus a single `google_compute_shared_vpc_service_project`; the project
+attaches **itself** to the host so the dependency graph stays acyclic.
+
+- **Inputs:** `name`, `project_id`, `folder_id`, `shared_vpc_host_project_id` (required, validated);
+  `billing_account`, `labels`, `activate_apis` (default `["compute.googleapis.com"]`),
+  `deletion_policy`.
+- **Resources:** `google_project`, `google_project_service` (per API), and
+  `google_compute_shared_vpc_service_project` (depends on the Compute API).
+- **Outputs:** `project_id`, `project_number`, `name`, `host_project_id`.
+
+## gcp-shared-vpc-iam-v0.1.0
+
+New **`gcp/shared-vpc-iam`** module — the IAM unit that lets a GKE **service** project use a **host**
+project's subnetwork, mirroring the `gcp/workload-iam` pattern (pure producers + one IAM home).
+
+- **Inputs:** `host_project_id`, `service_project_number` (the project *number*, validated digits),
+  `region`, `subnetwork` (required); `grant_host_service_agent_user` (default `true`).
+- **Resources:** subnet-scoped `roles/compute.networkUser` (`google_compute_subnetwork_iam_member`)
+  for the service project's `cloudservices` and `container-engine-robot` agents, and
+  `roles/container.hostServiceAgentUser` on the host project for the GKE agent.
+- **Outputs:** `gke_service_agent`, `google_apis_service_agent`, `network_user_members`.
+- Least privilege: `networkUser` is granted on the specific subnet, not the host project. Apply the
+  service project (which enables the Container API) before this unit so the GKE agent exists.
+
 ## aws-lambda-v0.3.0
 
 Adds **Lambda Function URL** and **layer** support to the `aws/lambda` module — backward compatible
