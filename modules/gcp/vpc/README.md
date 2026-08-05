@@ -47,7 +47,7 @@ subnetwork = module.vpc.subnets_self_links["gke"]
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_google"></a> [google](#provider\_google) | 7.36.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | 7.39.0 |
 
 ## Modules
 
@@ -57,6 +57,8 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [google_compute_address.nat](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_address) | resource |
+| [google_compute_firewall.iap_ssh](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
 | [google_compute_global_address.private_service_access](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_global_address) | resource |
 | [google_compute_network.this](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_network) | resource |
 | [google_compute_router.this](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_router) | resource |
@@ -69,8 +71,11 @@ No modules.
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_create_nat"></a> [create\_nat](#input\_create\_nat) | Create a Cloud Router and Cloud NAT so nodes without external IPs (typical for private GKE) can reach the internet for egress. | `bool` | `true` | no |
+| <a name="input_iap_ssh_enabled"></a> [iap\_ssh\_enabled](#input\_iap\_ssh\_enabled) | Create a firewall rule allowing SSH (tcp/22) from Google's IAP TCP-forwarding range (35.235.240.0/20) to instances tagged with iap\_ssh\_target\_tags. Lets an operator reach a host via `gcloud compute ssh --tunnel-through-iap` without any public SSH exposure. | `bool` | `false` | no |
+| <a name="input_iap_ssh_target_tags"></a> [iap\_ssh\_target\_tags](#input\_iap\_ssh\_target\_tags) | Network tags the IAP SSH firewall rule targets. Only used when iap\_ssh\_enabled is true; an empty list would target the whole network, so set the tag(s) your host carries. | `list(string)` | `[]` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name applied to the VPC network and used as the prefix for its subnetworks and related resources. | `string` | n/a | yes |
 | <a name="input_nat_region"></a> [nat\_region](#input\_nat\_region) | Region for the Cloud Router and Cloud NAT. Defaults to the region of the first subnet when null. | `string` | `null` | no |
+| <a name="input_nat_reserve_static_ip"></a> [nat\_reserve\_static\_ip](#input\_nat\_reserve\_static\_ip) | Reserve a static regional external IP for Cloud NAT (MANUAL\_ONLY allocation) instead of dynamic AUTO\_ONLY. Only used when create\_nat is true. Use this when an external system must allowlist a stable egress address for instances that have no public IP of their own (e.g. a migration host reaching a database in another cloud). | `bool` | `false` | no |
 | <a name="input_private_service_access"></a> [private\_service\_access](#input\_private\_service\_access) | Enable Private Service Access (VPC peering) for Google-managed services such as Cloud SQL and,<br/>when a GKE control plane uses a private endpoint, services that reach the cluster's VPC. This<br/>reserves a global address range and creates the servicenetworking peering connection. | `bool` | `true` | no |
 | <a name="input_private_service_access_cidr"></a> [private\_service\_access\_cidr](#input\_private\_service\_access\_cidr) | CIDR block reserved for Private Service Access peering. Only used when private\_service\_access is true. | `string` | `"10.250.0.0/16"` | no |
 | <a name="input_private_service_access_deletion_policy"></a> [private\_service\_access\_deletion\_policy](#input\_private\_service\_access\_deletion\_policy) | Deletion policy for the Private Service Access peering connection. ABANDON (default) removes the<br/>connection from Terraform state on destroy without waiting for Google to release attached producer<br/>services (Cloud SQL, Memorystore), which avoids the common "producer services are still using this<br/>connection" teardown error. Set to null to have Terraform delete the connection and block until it<br/>is released. | `string` | `"ABANDON"` | no |
@@ -82,6 +87,7 @@ No modules.
 
 | Name | Description |
 | ---- | ----------- |
+| <a name="output_nat_ip_addresses"></a> [nat\_ip\_addresses](#output\_nat\_ip\_addresses) | Reserved static Cloud NAT egress IP address(es), or an empty list when NAT is disabled or using dynamic (AUTO\_ONLY) allocation. Allowlist these on external systems the private instances must reach. |
 | <a name="output_nat_router_name"></a> [nat\_router\_name](#output\_nat\_router\_name) | Name of the Cloud Router backing Cloud NAT, or null when NAT is disabled. |
 | <a name="output_network_id"></a> [network\_id](#output\_network\_id) | The ID of the VPC network. |
 | <a name="output_network_name"></a> [network\_name](#output\_network\_name) | The name of the VPC network. |

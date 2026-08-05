@@ -117,11 +117,37 @@ variable "private_service_access_deletion_policy" {
   }
 }
 
+variable "iap_ssh_enabled" {
+  description = "Create a firewall rule allowing SSH (tcp/22) from Google's IAP TCP-forwarding range (35.235.240.0/20) to instances tagged with iap_ssh_target_tags. Lets an operator reach a host via `gcloud compute ssh --tunnel-through-iap` without any public SSH exposure."
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
+variable "iap_ssh_target_tags" {
+  description = "Network tags the IAP SSH firewall rule targets. Only used when iap_ssh_enabled is true; an empty list would target the whole network, so set the tag(s) your host carries."
+  type        = list(string)
+  nullable    = false
+  default     = []
+
+  validation {
+    condition     = !var.iap_ssh_enabled || length(var.iap_ssh_target_tags) > 0
+    error_message = "iap_ssh_target_tags must be non-empty when iap_ssh_enabled is true."
+  }
+}
+
 variable "create_nat" {
   description = "Create a Cloud Router and Cloud NAT so nodes without external IPs (typical for private GKE) can reach the internet for egress."
   type        = bool
   nullable    = false
   default     = true
+}
+
+variable "nat_reserve_static_ip" {
+  description = "Reserve a static regional external IP for Cloud NAT (MANUAL_ONLY allocation) instead of dynamic AUTO_ONLY. Only used when create_nat is true. Use this when an external system must allowlist a stable egress address for instances that have no public IP of their own (e.g. a migration host reaching a database in another cloud)."
+  type        = bool
+  nullable    = false
+  default     = false
 }
 
 variable "nat_region" {

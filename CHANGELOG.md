@@ -8,6 +8,75 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-compute-engine-v0.2.0
+
+Extends the `gcp/compute-engine` module so it can serve as a real host (e.g. a DB migration jump
+host) on a custom VPC — backward compatible (all new inputs default to the previous behaviour: named
+`default` network, no subnetwork, no public IP, no tags/labels/metadata/startup script, default
+service account).
+
+- **New inputs:** `subnetwork` (self link/name — required for custom-mode VPCs; takes precedence over
+  `network`); `enable_public_ip` (adds an ephemeral external IP; default false); `tags` (network
+  tags for firewall targeting); `labels`; `metadata`; `startup_script` (first-boot script, e.g. to
+  install packages); `service_account_email` + `service_account_scopes` (attach a SA; default leaves
+  the project default compute SA).
+- **New outputs:** `name`, `zone`, `public_ip` (null when no public IP).
+
+## gcp-vpc-v0.2.0
+
+Adds an optional **IAP SSH firewall rule** and an optional **static Cloud NAT egress IP** to the
+`gcp/vpc` module — backward compatible (nothing new is created unless enabled).
+
+- **IAP SSH:** `iap_ssh_enabled` (bool, default false) + `iap_ssh_target_tags` (list, default `[]`,
+  validated non-empty when enabled). When enabled, creates a firewall allowing `tcp/22` from Google's
+  IAP TCP-forwarding range (`35.235.240.0/20`) to instances carrying those tags — so an operator can
+  `gcloud compute ssh --tunnel-through-iap` to a host with no public SSH exposure.
+- **Static NAT egress IP:** `nat_reserve_static_ip` (bool, default false). When set (with
+  `create_nat`), reserves a regional `google_compute_address` and switches Cloud NAT to `MANUAL_ONLY`
+  using it, giving a stable egress address that an external system (e.g. a database in another cloud)
+  can allowlist for traffic from instances that have no public IP. New output `nat_ip_addresses`
+  (the reserved IP(s), or `[]`).
+
+## aws-rds-postgres-v0.1.0
+
+New **`aws/rds-postgres`** module — a single managed PostgreSQL instance on Amazon RDS, plus the
+subnet group, security group, and (opt-in) parameter group one instance always needs. The migration
+*source* for the `aws-gcp/rds-to-cloudsql-postgres` lab.
+
+- **Owns only** the instance + subnet group + security group + optional parameter group. Not the
+  VPC, extra databases, roles, or schemas (consumer/application concerns).
+- **Inputs:** `name`, `vpc_id`, `subnet_ids`, `master_password` (required, sensitive); `engine_version`
+  (default `16`), `instance_class` (default `db.t4g.micro`), `allocated_storage`/`max_allocated_storage`,
+  `storage_type`/`storage_encrypted`, `db_name`, `master_username`, `port`, `publicly_accessible`
+  (default false), `allowed_cidr_blocks`, `multi_az`, `parameter_group_family`, `parameters`
+  (list of `{name,value,apply_method}` — e.g. `rds.force_ssl`, `rds.logical_replication`),
+  `backup_retention_period`, `deletion_protection`, `skip_final_snapshot`, `apply_immediately`,
+  `auto_minor_version_upgrade`, `performance_insights_enabled`, `tags`.
+- **Security shape:** private by default (`publicly_accessible=false`); a lab exposes it via public
+  subnets + a narrow `allowed_cidr_blocks` /32 + `rds.force_ssl=1`. Per-CIDR ingress uses the modern
+  `aws_vpc_security_group_ingress_rule` resources. Storage encrypted by default.
+- **Outputs:** `id`, `arn`, `resource_id`, `address`, `endpoint`, `port`, `db_name`,
+  `master_username`, `security_group_id`, `parameter_group_name`.
+- Ships `examples/basic/` (VPC + public, SSL-enforced instance) and a `TestRDSPostgresBasic` Terratest.
+
+## gcp-cloud-sql-postgres-v0.2.0
+
+Adds **password authentication** and **operator reachability** to the `gcp/cloud-sql-postgres`
+module — backward compatible (all new inputs default to the previous private-IP-only, IAM-auth
+behaviour).
+
+- **New inputs:** `enable_public_ip` (bool, default false — adds a public endpoint alongside the
+  private IP); `authorized_networks` (list of `{name,value}` CIDR allowlist for the public IP,
+  default `[]`); `ssl_mode` (optional — `ENCRYPTED_ONLY` etc., default null/provider-default);
+  `admin_password` (optional, sensitive — sets the built-in `postgres` user's password so
+  password-auth restores can run as `postgres`).
+- **Behaviour:** `ip_configuration.ipv4_enabled` now tracks `enable_public_ip`; a `google_sql_user`
+  for `postgres` is created only when `admin_password` is set (with `deletion_policy = "ABANDON"`, so
+  teardown doesn't fail trying to `DROP ROLE postgres` once it owns objects — the instance deletion
+  removes it); `authorized_networks` and `ssl_mode` are threaded into `ip_configuration`. Existing
+  consumers (no new inputs) are unchanged.
+- **New output:** `public_ip_address` (null when `enable_public_ip` is false).
+
 ## gcp-argocd-v0.1.0
 
 New **`gcp/argocd`** module — installs **Argo CD** onto an existing (GKE) cluster from the community

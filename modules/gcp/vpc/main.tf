@@ -80,6 +80,26 @@ resource "google_service_networking_connection" "private_service_access" {
   deletion_policy = var.private_service_access_deletion_policy
 }
 
+# --- IAP SSH firewall ------------------------------------------------------
+# Allow SSH from Google's IAP TCP-forwarding range to instances carrying the given tags, so an
+# operator can `gcloud compute ssh --tunnel-through-iap` to a host with no public SSH exposure.
+resource "google_compute_firewall" "iap_ssh" {
+  count = var.iap_ssh_enabled ? 1 : 0
+
+  name    = "${var.name}-allow-iap-ssh"
+  project = var.project_id
+  network = google_compute_network.this.id
+
+  direction     = "INGRESS"
+  source_ranges = ["35.235.240.0/20"]
+  target_tags   = var.iap_ssh_target_tags
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+}
+
 # --- Cloud NAT for private node egress -------------------------------------
 resource "google_compute_router" "this" {
   count = var.create_nat ? 1 : 0
@@ -90,6 +110,16 @@ resource "google_compute_router" "this" {
   network = google_compute_network.this.id
 }
 
+# Optional reserved (static) NAT egress IP, so an external system (e.g. a database in another cloud)
+# can allowlist a stable address for traffic from instances that have no public IP of their own.
+resource "google_compute_address" "nat" {
+  count = var.create_nat && var.nat_reserve_static_ip ? 1 : 0
+
+  name    = "${var.name}-nat-ip"
+  project = var.project_id
+  region  = local.nat_region
+}
+
 resource "google_compute_router_nat" "this" {
   count = var.create_nat ? 1 : 0
 
@@ -97,7 +127,8 @@ resource "google_compute_router_nat" "this" {
   project                            = var.project_id
   region                             = local.nat_region
   router                             = google_compute_router.this[0].name
-  nat_ip_allocate_option             = "AUTO_ONLY"
+  nat_ip_allocate_option             = var.nat_reserve_static_ip ? "MANUAL_ONLY" : "AUTO_ONLY"
+  nat_ips                            = var.nat_reserve_static_ip ? google_compute_address.nat[*].self_link : null
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 
   log_config {

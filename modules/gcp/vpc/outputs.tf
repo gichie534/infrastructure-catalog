@@ -52,3 +52,8 @@ output "nat_router_name" {
   description = "Name of the Cloud Router backing Cloud NAT, or null when NAT is disabled."
   value       = var.create_nat ? google_compute_router.this[0].name : null
 }
+
+output "nat_ip_addresses" {
+  description = "Reserved static Cloud NAT egress IP address(es), or an empty list when NAT is disabled or using dynamic (AUTO_ONLY) allocation. Allowlist these on external systems the private instances must reach."
+  value       = google_compute_address.nat[*].address
+}
