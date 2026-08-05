@@ -75,6 +75,64 @@ variable "database_name" {
   }
 }
 
+variable "enable_public_ip" {
+  description = <<-EOT
+    Give the instance a public IPv4 endpoint in addition to its private IP. Off by default
+    (private-IP-only is the production shape). A migration or bootstrap that must reach the instance
+    from outside the VPC (e.g. an operator running pg_restore) can enable it, paired with a narrow
+    authorized_networks allowlist and ssl_mode = ENCRYPTED_ONLY.
+  EOT
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
+variable "authorized_networks" {
+  description = <<-EOT
+    Public CIDR allowlist for the instance's public IP. Only meaningful when enable_public_ip is
+    true. Each entry has a name (label) and value (CIDR). Keep this narrow (e.g. a single operator /32).
+  EOT
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  nullable = false
+  default  = []
+
+  validation {
+    condition     = alltrue([for n in var.authorized_networks : can(cidrhost(n.value, 0))])
+    error_message = "each authorized_networks value must be a valid CIDR (e.g. 203.0.113.10/32)."
+  }
+}
+
+variable "ssl_mode" {
+  description = <<-EOT
+    Enforcement of TLS on connections. ENCRYPTED_ONLY requires TLS but not a client cert;
+    ALLOW_UNENCRYPTED_AND_ENCRYPTED permits plaintext; TRUSTED_CLIENT_CERTIFICATE_REQUIRED also
+    demands a client certificate. Null (default) leaves the provider default in place.
+  EOT
+  type        = string
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.ssl_mode == null || contains(["ALLOW_UNENCRYPTED_AND_ENCRYPTED", "ENCRYPTED_ONLY", "TRUSTED_CLIENT_CERTIFICATE_REQUIRED"], var.ssl_mode)
+    error_message = "ssl_mode must be one of ALLOW_UNENCRYPTED_AND_ENCRYPTED, ENCRYPTED_ONLY, TRUSTED_CLIENT_CERTIFICATE_REQUIRED, or null."
+  }
+}
+
+variable "admin_password" {
+  description = <<-EOT
+    When set, assigns this password to the built-in `postgres` user (a member of cloudsqlsuperuser),
+    enabling password authentication for that admin role. Required for a password-auth migration that
+    restores as `postgres`. Leave null to keep the instance IAM-auth-only.
+  EOT
+  type        = string
+  nullable    = true
+  default     = null
+  sensitive   = true
+}
+
 variable "iam_service_account_emails" {
   description = <<-EOT
     Email addresses of Google service accounts to register as IAM database users. A GKE pod
