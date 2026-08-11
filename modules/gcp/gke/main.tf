@@ -42,21 +42,40 @@ resource "google_container_cluster" "this" {
   }
 
   # Enable the GKE-managed Secret Manager add-on (the Google-managed Secrets Store CSI Driver +
-  # GCP provider) when requested.
+  # GCP provider) when requested. Optional rotation_config re-fetches mounted secret values on an
+  # interval so files pick up a new secret version without a pod restart.
   dynamic "secret_manager_config" {
     for_each = var.enable_secret_manager_addon ? [1] : []
     content {
       enabled = true
+
+      dynamic "rotation_config" {
+        for_each = var.secret_manager_addon_rotation.enabled ? [1] : []
+        content {
+          enabled           = true
+          rotation_interval = var.secret_manager_addon_rotation.rotation_interval
+        }
+      }
     }
   }
 
   # The SecretSync controller materializes Secret Manager secrets as Kubernetes Secrets so they
   # can be referenced through standard valueFrom.secretKeyRef / envFrom. Independent from the
-  # CSI-based add-on above — either or both may be enabled.
+  # CSI-based add-on above — either or both may be enabled. Optional rotation_config periodically
+  # checks Secret Manager for a new version and updates the Kubernetes Secret's data; consumers
+  # must detect and reload the value themselves (no pod restart).
   dynamic "secret_sync_config" {
     for_each = var.enable_secret_sync ? [1] : []
     content {
       enabled = true
+
+      dynamic "rotation_config" {
+        for_each = var.secret_sync_rotation.enabled ? [1] : []
+        content {
+          enabled           = true
+          rotation_interval = var.secret_sync_rotation.rotation_interval
+        }
+      }
     }
   }
 

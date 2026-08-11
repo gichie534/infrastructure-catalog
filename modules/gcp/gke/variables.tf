@@ -119,9 +119,39 @@ variable "enable_secret_manager_addon" {
   default     = false
 }
 
+variable "secret_manager_addon_rotation" {
+  description = "Automatic rotation for the Secret Manager add-on's mounted volumes: periodically re-fetches secret values so mounted files pick up a new version without a pod restart. Ignored unless enable_secret_manager_addon is true. enabled defaults to true (rotation on); rotation_interval is a duration string (e.g. \"120s\") and defaults to the API's own default (2 minutes) when null."
+  type = object({
+    enabled           = optional(bool, true)
+    rotation_interval = optional(string)
+  })
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = var.secret_manager_addon_rotation.rotation_interval == null || can(regex("^[0-9]+(\\.[0-9]+)?s$", var.secret_manager_addon_rotation.rotation_interval))
+    error_message = "secret_manager_addon_rotation.rotation_interval must be a duration string in seconds, e.g. \"120s\"."
+  }
+}
+
 variable "enable_secret_sync" {
   description = "Enable the SecretSync controller (secret_sync_config) on the cluster. The controller materializes a Secret Manager secret as a Kubernetes Secret (referenced via valueFrom.secretKeyRef / envFrom) given a SecretProviderClass. This is an independent feature from enable_secret_manager_addon — either, both, or neither may be enabled, depending on whether the workload needs file mounts, env-var consumption, or both. Requires a GKE control plane version that supports the feature (1.33+ at the time of writing)."
   type        = bool
   nullable    = false
   default     = false
+}
+
+variable "secret_sync_rotation" {
+  description = "Automatic rotation for SecretSync-materialized Kubernetes Secrets: periodically checks Secret Manager for a new secret version and updates the Kubernetes Secret's data (consumers must detect and reload it themselves — this does not restart pods). Ignored unless enable_secret_sync is true. enabled defaults to true (rotation on); rotation_interval is a duration string (e.g. \"120s\") and defaults to the API's own default (2 minutes) when null."
+  type = object({
+    enabled           = optional(bool, true)
+    rotation_interval = optional(string)
+  })
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = var.secret_sync_rotation.rotation_interval == null || can(regex("^[0-9]+(\\.[0-9]+)?s$", var.secret_sync_rotation.rotation_interval))
+    error_message = "secret_sync_rotation.rotation_interval must be a duration string in seconds, e.g. \"120s\"."
+  }
 }

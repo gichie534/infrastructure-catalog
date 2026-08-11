@@ -42,7 +42,7 @@ module "gke" {
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_google"></a> [google](#provider\_google) | 7.36.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | 7.43.0 |
 
 ## Modules
 
@@ -60,6 +60,8 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_deletion_protection"></a> [deletion\_protection](#input\_deletion\_protection) | Whether the cluster is protected from deletion via Terraform. Keep true for real environments; examples/tests set it false. | `bool` | `true` | no |
 | <a name="input_enable_private_endpoint"></a> [enable\_private\_endpoint](#input\_enable\_private\_endpoint) | When true, the control plane is reachable only via its private endpoint. Default false keeps a public endpoint (locked down with master\_authorized\_networks) while nodes stay private. | `bool` | `false` | no |
+| <a name="input_enable_secret_manager_addon"></a> [enable\_secret\_manager\_addon](#input\_enable\_secret\_manager\_addon) | Enable the GKE-managed Secret Manager add-on (the Google-managed build of the Secrets Store CSI Driver and its GCP provider). When true, pods may mount Secret Manager secrets as files via a SecretProviderClass referencing the secrets-store-gke.csi.k8s.io driver. Disabled by default to keep the cluster minimal. | `bool` | `false` | no |
+| <a name="input_enable_secret_sync"></a> [enable\_secret\_sync](#input\_enable\_secret\_sync) | Enable the SecretSync controller (secret\_sync\_config) on the cluster. The controller materializes a Secret Manager secret as a Kubernetes Secret (referenced via valueFrom.secretKeyRef / envFrom) given a SecretProviderClass. This is an independent feature from enable\_secret\_manager\_addon — either, both, or neither may be enabled, depending on whether the workload needs file mounts, env-var consumption, or both. Requires a GKE control plane version that supports the feature (1.33+ at the time of writing). | `bool` | `false` | no |
 | <a name="input_master_authorized_networks"></a> [master\_authorized\_networks](#input\_master\_authorized\_networks) | CIDR blocks allowed to reach the control plane endpoint. Each entry is a display name and a CIDR. An empty list allows no external access. | <pre>list(object({<br/>    display_name = string<br/>    cidr_block   = string<br/>  }))</pre> | `[]` | no |
 | <a name="input_master_ipv4_cidr_block"></a> [master\_ipv4\_cidr\_block](#input\_master\_ipv4\_cidr\_block) | The /28 CIDR range for the cluster's hosted control plane. Must not overlap with subnet or secondary ranges. | `string` | `"172.16.0.0/28"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the GKE cluster. | `string` | n/a | yes |
@@ -69,6 +71,8 @@ No modules.
 | <a name="input_region"></a> [region](#input\_region) | Region for the regional Autopilot cluster (e.g. us-central1). | `string` | n/a | yes |
 | <a name="input_release_channel"></a> [release\_channel](#input\_release\_channel) | GKE release channel that governs cluster version and auto-upgrade cadence. Autopilot clusters must be enrolled in a channel. | `string` | `"REGULAR"` | no |
 | <a name="input_resource_labels"></a> [resource\_labels](#input\_resource\_labels) | Labels applied to the GKE cluster and the resources it manages. | `map(string)` | `{}` | no |
+| <a name="input_secret_manager_addon_rotation"></a> [secret\_manager\_addon\_rotation](#input\_secret\_manager\_addon\_rotation) | Automatic rotation for the Secret Manager add-on's mounted volumes: periodically re-fetches secret values so mounted files pick up a new version without a pod restart. Ignored unless enable\_secret\_manager\_addon is true. enabled defaults to true (rotation on); rotation\_interval is a duration string (e.g. "120s") and defaults to the API's own default (2 minutes) when null. | <pre>object({<br/>    enabled           = optional(bool, true)<br/>    rotation_interval = optional(string)<br/>  })</pre> | `{}` | no |
+| <a name="input_secret_sync_rotation"></a> [secret\_sync\_rotation](#input\_secret\_sync\_rotation) | Automatic rotation for SecretSync-materialized Kubernetes Secrets: periodically checks Secret Manager for a new secret version and updates the Kubernetes Secret's data (consumers must detect and reload it themselves — this does not restart pods). Ignored unless enable\_secret\_sync is true. enabled defaults to true (rotation on); rotation\_interval is a duration string (e.g. "120s") and defaults to the API's own default (2 minutes) when null. | <pre>object({<br/>    enabled           = optional(bool, true)<br/>    rotation_interval = optional(string)<br/>  })</pre> | `{}` | no |
 | <a name="input_services_range_name"></a> [services\_range\_name](#input\_services\_range\_name) | Name of the subnetwork secondary range to use for Service IPs. Matches the vpc module's services\_range\_name. | `string` | `"services"` | no |
 | <a name="input_subnetwork"></a> [subnetwork](#input\_subnetwork) | Self link or name of the subnetwork for the cluster nodes. Wire this to the vpc module's subnets\_self\_links output. | `string` | n/a | yes |
 
