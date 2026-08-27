@@ -19,5 +19,5 @@ output "dns_authorization_records" {
     certificate to validate and auto-renew. The certificate stays pending until this resolves. Feed
     these into the gcp/cloud-dns module (rrdatas = [data]).
   EOT
-  value = { for k, m in module.certificate : k => m.dns_authorization_record }
+  value       = { for k, m in module.certificate : k => m.dns_authorization_record }
 }
