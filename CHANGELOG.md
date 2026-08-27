@@ -8,6 +8,35 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-cloud-sql-postgres-v0.3.0
+
+Adds the **durability and availability** half of the `gcp/cloud-sql-postgres` contract — HA,
+disk sizing, backups/PITR, a maintenance window, and cross-region read replicas. Backward
+compatible: every new input defaults to the module's previous behaviour (single-zone, no backups,
+provider-default disk, unmanaged maintenance, no replicas).
+
+- **New inputs:** `availability_type` (`ZONAL`/`REGIONAL`, default `ZONAL` — `REGIONAL` adds a
+  synchronous standby in a second zone with automatic failover); `disk_size`, `disk_type`,
+  `disk_autoresize`, `disk_autoresize_limit` (all default null → provider default);
+  `backup_configuration` (optional object: `enabled`, `start_time` UTC `HH:MM`, `location` for
+  off-region backup storage, `point_in_time_recovery_enabled`, `transaction_log_retention_days`,
+  `retained_backups`, `retention_unit` — default null creates no backup config at all, as before);
+  `maintenance_window` (optional `{day, hour, update_track}`); `read_replicas` (map of suffix →
+  `{region, tier?, availability_type?, disk_*?, user_labels?}`, default `{}`).
+- **Behaviour:** `settings.availability_type` is no longer hardcoded to `ZONAL`. Each entry in
+  `read_replicas` creates a `google_sql_database_instance` named `<name>-<key>` with
+  `master_instance_name` pointing at the primary, private-IP only on the same VPC, and
+  `cloudsql.iam_authentication` on so IAM auth survives a promotion. Replicas carry no
+  `backup_configuration` (Cloud SQL rejects it on a replica) and no `google_sql_user` resources —
+  users replicate from the primary. Replicas inherit the primary's tier/disk settings unless they
+  override them.
+- **New outputs:** `availability_type`, `replica_instance_names`, `replica_connection_names`,
+  `replica_private_ip_addresses`.
+- **RPO note (documented in the README):** `REGIONAL` is synchronous, so zonal-failure RPO is zero.
+  Cloud SQL has no synchronous cross-region option — a cross-region replica is asynchronous, so
+  regional-outage RPO is the replication lag (seconds), not zero. Promotion
+  (`gcloud sql instances promote-replica`) is a deliberate operator action, not a Terraform one.
+
 ## gcp-compute-engine-v0.2.0
 
 Extends the `gcp/compute-engine` module so it can serve as a real host (e.g. a DB migration jump
