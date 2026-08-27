@@ -63,6 +63,176 @@ variable "edition" {
   }
 }
 
+variable "availability_type" {
+  description = <<-EOT
+    High availability shape of the instance. REGIONAL provisions a standby in a second zone of the
+    same region with SYNCHRONOUS replication and automatic failover (zero RPO for a zonal failure);
+    ZONAL is a single zone with no standby. Production instances should be REGIONAL.
+  EOT
+  type        = string
+  nullable    = false
+  default     = "ZONAL"
+
+  validation {
+    condition     = contains(["ZONAL", "REGIONAL"], var.availability_type)
+    error_message = "availability_type must be either ZONAL or REGIONAL."
+  }
+}
+
+variable "disk_size" {
+  description = "Size of the data disk in GB. Null leaves the Cloud SQL default (10 GB). The disk can grow but never shrink."
+  type        = number
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.disk_size == null || var.disk_size >= 10
+    error_message = "disk_size must be at least 10 GB."
+  }
+}
+
+variable "disk_type" {
+  description = "Data disk type. PD_SSD is the default for production; PD_HDD is cheaper and slower. Null leaves the provider default."
+  type        = string
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.disk_type == null || contains(["PD_SSD", "PD_HDD", "HYPERDISK_BALANCED"], var.disk_type)
+    error_message = "disk_type must be one of PD_SSD, PD_HDD, HYPERDISK_BALANCED, or null."
+  }
+}
+
+variable "disk_autoresize" {
+  description = "Let Cloud SQL grow the data disk automatically when it fills up. Null leaves the provider default (true)."
+  type        = bool
+  nullable    = true
+  default     = null
+}
+
+variable "disk_autoresize_limit" {
+  description = "Upper bound in GB for automatic disk growth. 0 means no limit. Only meaningful when disk_autoresize is enabled."
+  type        = number
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.disk_autoresize_limit == null || var.disk_autoresize_limit >= 0
+    error_message = "disk_autoresize_limit must be 0 (no limit) or a positive number of GB."
+  }
+}
+
+variable "backup_configuration" {
+  description = <<-EOT
+    Automated backups and point-in-time recovery. Null (the default) creates no backup configuration
+    at all, leaving the instance unbacked-up — set this for any environment holding real data.
+
+    - `start_time` is UTC `HH:MM`; pick a low-traffic window.
+    - `location` stores the backups in a different (multi-)region from the instance, so one region's
+      loss can't take the data and its backups together. Null keeps them in the instance's region.
+    - `point_in_time_recovery_enabled` turns on write-ahead-log archiving, allowing a restore to any
+      point inside `transaction_log_retention_days` rather than only to the last nightly backup.
+    - `retention_unit` is `COUNT`, so `retained_backups` is a number of backups, not days.
+  EOT
+  type = object({
+    enabled                        = optional(bool, true)
+    start_time                     = optional(string, "03:00")
+    location                       = optional(string)
+    point_in_time_recovery_enabled = optional(bool, true)
+    transaction_log_retention_days = optional(number, 7)
+    retained_backups               = optional(number, 30)
+    retention_unit                 = optional(string, "COUNT")
+  })
+  nullable = true
+  default  = null
+
+  validation {
+    condition     = var.backup_configuration == null || can(regex("^([01][0-9]|2[0-3]):[0-5][0-9]$", var.backup_configuration.start_time))
+    error_message = "backup_configuration.start_time must be a UTC time in HH:MM 24-hour form."
+  }
+
+  validation {
+    condition = var.backup_configuration == null || (
+      var.backup_configuration.transaction_log_retention_days >= 1 &&
+      var.backup_configuration.transaction_log_retention_days <= 35
+    )
+    error_message = "backup_configuration.transaction_log_retention_days must be between 1 and 35."
+  }
+
+  validation {
+    condition     = var.backup_configuration == null || var.backup_configuration.retained_backups >= 1
+    error_message = "backup_configuration.retained_backups must be at least 1."
+  }
+}
+
+variable "maintenance_window" {
+  description = <<-EOT
+    Weekly window in which Cloud SQL may apply maintenance (a brief restart / failover). `day` is
+    1 (Monday) to 7 (Sunday), `hour` is 0-23 UTC. `update_track` of `stable` receives updates later
+    than `canary`, which is what a production instance normally wants. Null leaves it unmanaged, so
+    maintenance can land at any time.
+  EOT
+  type = object({
+    day          = number
+    hour         = number
+    update_track = optional(string, "stable")
+  })
+  nullable = true
+  default  = null
+
+  validation {
+    condition     = var.maintenance_window == null || (var.maintenance_window.day >= 1 && var.maintenance_window.day <= 7)
+    error_message = "maintenance_window.day must be between 1 (Monday) and 7 (Sunday)."
+  }
+
+  validation {
+    condition     = var.maintenance_window == null || (var.maintenance_window.hour >= 0 && var.maintenance_window.hour <= 23)
+    error_message = "maintenance_window.hour must be between 0 and 23 (UTC)."
+  }
+
+  validation {
+    condition     = var.maintenance_window == null || contains(["canary", "stable", "week5"], var.maintenance_window.update_track)
+    error_message = "maintenance_window.update_track must be one of canary, stable, week5."
+  }
+}
+
+variable "read_replicas" {
+  description = <<-EOT
+    Read replicas to create, keyed by a short suffix appended to the instance name (e.g. `dr` gives
+    `<name>-dr`). Set `region` to a DIFFERENT region than the primary for a cross-region replica: it
+    survives the loss of the primary's region and can be promoted to a standalone primary, which is
+    the regional-disaster recovery path. Replication is ASYNCHRONOUS, so the RPO is the replication
+    lag (usually seconds), not zero — pair it with a REGIONAL primary for zero-RPO zonal failover.
+
+    Each replica inherits the primary's tier / disk settings unless it overrides them. Backups are
+    not configurable on a replica (Cloud SQL rejects it); IAM database users replicate from the
+    primary. The VPC's Private Service Access allocation is global, so no extra network setup is
+    needed for the replica's region.
+  EOT
+  type = map(object({
+    region                = string
+    tier                  = optional(string)
+    availability_type     = optional(string, "ZONAL")
+    disk_size             = optional(number)
+    disk_type             = optional(string)
+    disk_autoresize       = optional(bool)
+    disk_autoresize_limit = optional(number)
+    user_labels           = optional(map(string))
+  }))
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = alltrue([for r in var.read_replicas : contains(["ZONAL", "REGIONAL"], r.availability_type)])
+    error_message = "each read_replicas availability_type must be either ZONAL or REGIONAL."
+  }
+
+  validation {
+    condition     = alltrue([for k, r in var.read_replicas : can(regex("^[a-z][a-z0-9-]*[a-z0-9]$", k))])
+    error_message = "each read_replicas key must be lowercase letters, numbers, or hyphens, start with a letter, and not end with a hyphen (it becomes part of the instance name)."
+  }
+}
+
 variable "database_name" {
   description = "Name of the application database to create on the instance."
   type        = string
