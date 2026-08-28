@@ -20,6 +20,12 @@ locals {
     for rel, r in var.records :
     rel => rel == "" ? var.dns_name : "${rel}.${var.dns_name}"
   }
+
+  # Same expansion for record_sets, which is keyed by label rather than by name.
+  record_set_fqdns = {
+    for label, r in var.record_sets :
+    label => r.name == "" ? var.dns_name : "${r.name}.${var.dns_name}"
+  }
 }
 
 resource "google_dns_managed_zone" "this" {
@@ -49,6 +55,19 @@ resource "google_dns_record_set" "this" {
   project      = var.project_id
   managed_zone = google_dns_managed_zone.this.name
   name         = local.record_fqdns[each.key]
+  type         = each.value.type
+  ttl          = each.value.ttl
+  rrdatas      = each.value.rrdatas
+}
+
+# Label-keyed records. Same expansion against dns_name as `records`, but because the key is a label
+# rather than the name, several types can share one name — which any real apex requires (A + MX + TXT).
+resource "google_dns_record_set" "sets" {
+  for_each = var.record_sets
+
+  project      = var.project_id
+  managed_zone = google_dns_managed_zone.this.name
+  name         = local.record_set_fqdns[each.key]
   type         = each.value.type
   ttl          = each.value.ttl
   rrdatas      = each.value.rrdatas

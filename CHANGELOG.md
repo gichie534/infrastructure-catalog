@@ -8,6 +8,23 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-cloud-dns-v0.4.0
+
+Adds a **`record_sets`** input to the `gcp/cloud-dns` module so a zone can hold more than one record
+type at the same name. Backward compatible — `record_sets` defaults to `{}` and the existing `records`
+input is unchanged.
+
+- **Why:** `records` is keyed by record NAME, which caps it at one record per name. Any real apex needs
+  several at once — a live zone typically has `A` (site), `MX` (mail) and `TXT` (SPF + domain
+  verification) all on the bare domain. The module simply could not describe such a zone.
+- **New input:** `record_sets` — a map keyed by an arbitrary caller LABEL, with the name in the value:
+  `{ name (relative to dns_name, "" = apex), type, ttl = 300, rrdatas }`. Validated non-empty `rrdatas`
+  and rejects names with a trailing dot (they are relative, not absolute).
+- **New resource:** `google_dns_record_set.sets`, expanded against `dns_name` exactly as `records` is.
+- **Guidance:** prefer `record_sets` for new zones; `records` stays for existing consumers.
+  `validation_records` is unchanged and remains the input for computed, ABSOLUTE names (Certificate
+  Manager DNS authorizations).
+
 ## gcp-cloud-sql-postgres-v0.3.0
 
 Adds the **durability and availability** half of the `gcp/cloud-sql-postgres` contract — HA,

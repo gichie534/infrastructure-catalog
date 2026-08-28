@@ -79,6 +79,49 @@ variable "records" {
   }
 }
 
+variable "record_sets" {
+  description = <<-EOT
+    DNS records keyed by a caller-chosen LABEL, with the record name carried in the value. This is the
+    general form of `records` and the one to prefer for a real zone.
+
+    `records` is keyed by record name, so it can hold only ONE record per name. A live apex needs
+    several — e.g. grace.io. simultaneously has A (the site), MX (mail), and TXT (SPF + domain
+    verification). Use `record_sets` whenever a name needs more than one type; the label is arbitrary
+    and only has to be unique.
+
+    - name:    record name RELATIVE to dns_name; "" is the zone apex. (Contrast `validation_records`,
+               whose name is absolute.)
+    - type:    record type.
+    - ttl:     optional, default 300.
+    - rrdatas: the record values. TXT values must include their own escaped quotes.
+
+    Example:
+      record_sets = {
+        apex_a   = { name = "", type = "A",   rrdatas = ["203.0.113.10"] }
+        apex_mx  = { name = "", type = "MX",  rrdatas = ["10 mail.example.com."] }
+        apex_spf = { name = "", type = "TXT", rrdatas = ["\"v=spf1 -all\""] }
+      }
+  EOT
+  type = map(object({
+    name    = string
+    type    = string
+    ttl     = optional(number, 300)
+    rrdatas = list(string)
+  }))
+  nullable = false
+  default  = {}
+
+  validation {
+    condition     = alltrue([for r in values(var.record_sets) : length(r.rrdatas) > 0])
+    error_message = "each record set must have at least one entry in rrdatas."
+  }
+
+  validation {
+    condition     = alltrue([for r in values(var.record_sets) : !endswith(r.name, ".")])
+    error_message = "record_sets names are relative to dns_name and must not end with a dot (use \"\" for the apex)."
+  }
+}
+
 variable "validation_records" {
   description = <<-EOT
     Records whose NAME is computed (known only after apply) — chiefly ACME / Certificate Manager
