@@ -8,6 +8,31 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-iap-access-v0.2.0
+
+Adds an optional **`cors_allow_http_options`** input to the `gcp/iap-access` module so IAP can let
+CORS preflight requests through. Backward compatible — the input defaults to `null`, in which case no
+IAP settings resource is created at all and existing IAP configuration is left untouched.
+
+- **Why:** a browser sends the CORS preflight `OPTIONS` **without credentials** by design. With IAP in
+  front of an API on a different origin than the calling app, IAP rejects that preflight, so the
+  browser never issues the real request — which presents as a hang, not a 401. `allow_http_options`
+  exempts `OPTIONS` from IAP authorization while still authorizing the actual request, so the gate is
+  not bypassed.
+- **New input:** `cors_allow_http_options` (bool, nullable, default `null`). `true` = OPTIONS skip
+  authorization, `false` = IAP authorizes them normally, `null` = module manages no IAP settings.
+- **New resource:** `google_iap_settings.this`, count-gated on that input, with
+  `access_settings.cors_settings.allow_http_options`. Its `name` is pinned to the SAME scope as the
+  IAM grants — `projects/<project>/iap_web` project-wide, or
+  `projects/<project>/iap_web/compute/services/<backend_service>` when `backend_service` is set — so
+  access and settings can't drift onto different scopes.
+- **New outputs:** `settings_resource_name` (null when unmanaged), `cors_allow_http_options`.
+- **Scope note:** this module now covers both halves of IAP for a scope — *who* may pass
+  (IAM members) and *how the gate behaves* (settings). Settings are strictly opt-in so the module's
+  previous single-purpose behaviour is what you get by default.
+- **Tests:** `TestIapAccessBasic` now asserts the managed settings scope; new
+  `TestIapAccessSettingsUnmanaged` asserts no settings resource when the input is null.
+
 ## gcp-cloud-dns-v0.4.0
 
 Adds a **`record_sets`** input to the `gcp/cloud-dns` module so a zone can hold more than one record

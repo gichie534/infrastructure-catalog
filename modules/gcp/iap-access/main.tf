@@ -14,6 +14,14 @@
 
 locals {
   role = "roles/iap.httpsResourceAccessor"
+
+  # Resource name for the IAP settings below, kept on the SAME scope as the IAM grant above so the
+  # two never disagree: project-wide IAP web, or the single named backend service.
+  settings_name = (
+    var.backend_service == null
+    ? "projects/${var.project_id}/iap_web"
+    : "projects/${var.project_id}/iap_web/compute/services/${var.backend_service}"
+  )
 }
 
 # Project-wide IAP web access (all IAP-protected backends in the project).
@@ -33,4 +41,25 @@ resource "google_iap_web_backend_service_iam_member" "this" {
   web_backend_service = var.backend_service
   role                = local.role
   member              = each.value
+}
+
+# IAP settings for this scope. Separate from the IAM grants above: those decide WHO may pass through
+# the gate, this decides HOW the gate behaves. Created only when cors_allow_http_options is set, so a
+# consumer that only wants IAM grants gets no settings resource and any pre-existing IAP
+# configuration is left alone.
+#
+# allow_http_options exempts HTTP OPTIONS from IAP authorization. A browser sends the CORS preflight
+# OPTIONS WITHOUT credentials by design, so without this a cross-origin call to an IAP-protected API
+# fails at the preflight and the real request is never issued — which surfaces as a hang rather than
+# a 401. IAP still authorizes the actual (non-OPTIONS) request, so the gate is not bypassed.
+resource "google_iap_settings" "this" {
+  count = var.cors_allow_http_options == null ? 0 : 1
+
+  name = local.settings_name
+
+  access_settings {
+    cors_settings {
+      allow_http_options = var.cors_allow_http_options
+    }
+  }
 }

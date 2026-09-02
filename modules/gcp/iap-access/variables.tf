@@ -31,3 +31,10 @@ variable "backend_service" {
   nullable    = true
   default     = null
 }
+
+variable "cors_allow_http_options" {
+  description = "When set, manages IAP settings for this scope so cross-origin preflight requests can reach the backend: true lets HTTP OPTIONS calls skip IAP authorization, false makes IAP apply its normal authorization to them. Leave null (default) to not manage IAP settings at all, which leaves any existing configuration untouched. Set this to true when a browser app on one origin calls an IAP-protected API on another: the preflight OPTIONS request carries no credentials, so IAP would otherwise reject it and the actual request never gets sent."
+  type        = bool
+  nullable    = true
+  default     = null
+}

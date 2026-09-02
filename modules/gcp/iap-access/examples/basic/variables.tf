@@ -14,3 +14,10 @@ variable "account_id" {
   type        = string
   default     = "iap-access-example"
 }
+
+variable "cors_allow_http_options" {
+  description = "Whether to let HTTP OPTIONS (CORS preflight) calls skip IAP authorization. Null leaves IAP settings unmanaged."
+  type        = bool
+  nullable    = true
+  default     = true
+}

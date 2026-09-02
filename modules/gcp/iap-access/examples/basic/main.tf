@@ -11,7 +11,9 @@ resource "google_service_account" "example" {
   display_name = "iap-access example principal"
 }
 
-# Grant the service account access through IAP at the project-wide web scope.
+# Grant the service account access through IAP at the project-wide web scope, and manage IAP settings
+# so CORS preflight (OPTIONS) requests skip authorization — the shape a browser app needs when it
+# calls an IAP-protected API on another origin.
 module "iap_access" {
   source = "../../"
 
@@ -20,4 +22,6 @@ module "iap_access" {
   members = {
     example_sa = "serviceAccount:${google_service_account.example.email}"
   }
+
+  cors_allow_http_options = var.cors_allow_http_options
 }
