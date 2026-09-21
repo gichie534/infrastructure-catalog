@@ -1,27 +1,36 @@
 variable "monitors" {
   description = <<-EOT
-    Cost monitors to create, keyed by monitor name (used verbatim).
+    Cost monitors to create, keyed by monitor name (used verbatim). Empty (default) creates none — use
+    that together with a subscription's `monitor_arns` to attach alerts to a monitor you do not manage.
 
     A monitor defines WHAT is watched; it does not notify anyone on its own — that is a subscription.
 
-      - `monitor_type` — DIMENSIONAL (default) watches every value of one dimension; CUSTOM watches an
+      - `monitor_type` — DIMENSIONAL watches every value of one dimension; CUSTOM (default) watches an
         arbitrary Cost Explorer expression.
-      - `monitor_dimension` — required for DIMENSIONAL. `SERVICE` (default) is the one the API
-        documents for a standalone account, and it is the right default: it tracks every service you
-        use, including ones you did not know you had turned on.
+      - `monitor_dimension` — required for DIMENSIONAL. `SERVICE` is the usual choice.
       - `monitor_specification` — required for CUSTOM: a Cost Explorer `Expression` as a JSON string.
 
-    Note that monitors on linked account, cost allocation tag, or cost category can only be created
-    from an AWS Organizations management account.
+    **Read this before creating a DIMENSIONAL monitor.** AWS allows exactly
+    [one AWS-managed monitor for AWS services per account](https://docs.aws.amazon.com/cost-management/latest/userguide/management-limits.html),
+    and it creates that monitor for you when Cost Anomaly Detection is enabled. So on essentially any
+    real account, creating a `DIMENSIONAL`/`SERVICE` monitor fails with
+    `ValidationException: Limit exceeded on dimensional spend monitor creation`. The fix is not a bigger
+    quota — it is to stop creating one and point your subscriptions at the monitor that already exists
+    via `monitor_arns`. The default is CUSTOM for that reason: customer-managed monitors are limited to
+    500 per account, so they compose freely.
+
+    Monitors on linked account, cost allocation tag, or cost category can only be created from an AWS
+    Organizations management account.
   EOT
 
   type = map(object({
-    monitor_type          = optional(string, "DIMENSIONAL")
-    monitor_dimension     = optional(string, "SERVICE")
+    monitor_type          = optional(string, "CUSTOM")
+    monitor_dimension     = optional(string, null)
     monitor_specification = optional(string, null)
   }))
 
   nullable = false
+  default  = {}
 
   validation {
     condition     = alltrue([for m in var.monitors : contains(["DIMENSIONAL", "CUSTOM"], m.monitor_type)])
@@ -53,9 +62,14 @@ variable "subscriptions" {
       - `frequency` — IMMEDIATE, DAILY (default), or WEEKLY. AWS ties the channel to the frequency:
         IMMEDIATE is delivered only via SNS, DAILY and WEEKLY only by email. The module rejects the
         wrong pairing rather than letting you create a silent subscription.
-      - `monitor_keys` — which monitors this subscribes to, by their key in `monitors`. Empty (default)
-        subscribes to all of them.
-      - `email_subscribers` / `sns_topic_arns` — the recipients.
+      - `monitor_keys` — monitors from this module's `monitors`, by key.
+      - `monitor_arns` — monitors this module does NOT manage, by ARN. This is how you attach alerts to
+        the AWS-managed "AWS services" monitor that already exists in your account (see `monitors`).
+      - When both `monitor_keys` and `monitor_arns` are empty, the subscription covers every monitor in
+        `monitors`. Setting either one means "exactly what I listed" — the two are unioned, never
+        combined with the implicit all.
+      - `email_subscribers` / `sns_topic_arns` — the recipients. AWS permits at most 1 SNS topic and 10
+        email recipients per subscription.
       - `absolute_impact_threshold` — alert when the anomaly's dollar impact is at least this much.
       - `percentage_impact_threshold` — alert when actual spend exceeds expected by at least this
         percentage.
@@ -70,6 +84,7 @@ variable "subscriptions" {
   type = map(object({
     frequency                   = optional(string, "DAILY")
     monitor_keys                = optional(list(string), [])
+    monitor_arns                = optional(list(string), [])
     email_subscribers           = optional(list(string), [])
     sns_topic_arns              = optional(list(string), [])
     absolute_impact_threshold   = optional(number, null)
@@ -127,6 +142,19 @@ variable "subscriptions" {
       s.percentage_impact_threshold == null || s.percentage_impact_threshold > 0
     ])
     error_message = "percentage_impact_threshold must be greater than 0."
+  }
+
+  # AWS quota: 1 SNS topic per subscription. Exceeding it fails at apply with a validation error, so
+  # catch it at plan time. Fan-out to several destinations is the topic's job, not the subscription's.
+  validation {
+    condition     = alltrue([for s in var.subscriptions : length(s.sns_topic_arns) <= 1])
+    error_message = "AWS allows at most 1 SNS topic per alert subscription: use one topic and fan out from there."
+  }
+
+  # AWS quota: 10 email recipients per subscription.
+  validation {
+    condition     = alltrue([for s in var.subscriptions : length(s.email_subscribers) <= 10])
+    error_message = "AWS allows at most 10 email recipients per alert subscription."
   }
 }
 

@@ -26,12 +26,19 @@ resource "aws_ce_anomaly_monitor" "this" {
 }
 
 locals {
-  # Resolve each subscription's monitor keys (empty = every monitor) and turn the two threshold inputs
-  # into the list of dimension clauses AWS expects.
+  # Resolve each subscription's monitors and turn the two threshold inputs into the list of dimension
+  # clauses AWS expects.
+  #
+  # Monitors come from two places: keys into this module's `monitors`, and raw ARNs of monitors it does
+  # not manage. The second exists because AWS allows only one AWS-managed "AWS services" monitor per
+  # account and creates it for you, so the common case is adopting that monitor rather than making one.
+  # Naming neither means "every monitor this module manages".
   subscriptions = {
     for key, subscription in var.subscriptions : key => merge(subscription, {
       resolved_monitor_keys = (
-        length(subscription.monitor_keys) > 0 ? subscription.monitor_keys : keys(var.monitors)
+        length(subscription.monitor_keys) > 0 || length(subscription.monitor_arns) > 0
+        ? subscription.monitor_keys
+        : keys(var.monitors)
       )
 
       thresholds = concat(
@@ -54,9 +61,10 @@ resource "aws_ce_anomaly_subscription" "this" {
   name      = each.key
   frequency = each.value.frequency
 
-  monitor_arn_list = [
-    for monitor_key in each.value.resolved_monitor_keys : aws_ce_anomaly_monitor.this[monitor_key].arn
-  ]
+  monitor_arn_list = concat(
+    [for monitor_key in each.value.resolved_monitor_keys : aws_ce_anomaly_monitor.this[monitor_key].arn],
+    each.value.monitor_arns,
+  )
 
   dynamic "subscriber" {
     for_each = toset(each.value.email_subscribers)
@@ -119,6 +127,16 @@ resource "aws_ce_anomaly_subscription" "this" {
         for monitor_key in local.subscriptions[each.key].resolved_monitor_keys : contains(keys(var.monitors), monitor_key)
       ])
       error_message = "subscription '${each.key}' references a monitor key that is not declared in var.monitors."
+    }
+
+    # A subscription with no monitors is accepted by neither AWS nor common sense, and it is the natural
+    # mistake once `monitors` can be empty: declare subscriptions, forget to say what they watch.
+    precondition {
+      condition = (
+        length(local.subscriptions[each.key].resolved_monitor_keys) +
+        length(local.subscriptions[each.key].monitor_arns) > 0
+      )
+      error_message = "subscription '${each.key}' covers no monitors: set monitor_keys, set monitor_arns, or declare at least one monitor in var.monitors."
     }
   }
 }

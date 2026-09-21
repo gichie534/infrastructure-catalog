@@ -9,9 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestCostAnomalyDetectionBasic applies examples/basic (a SERVICE monitor plus a daily email
-// subscription thresholded on absolute OR percentage impact), asserts on the outputs, and always
-// destroys via defer.
+// TestCostAnomalyDetectionBasic applies examples/basic (a CUSTOM monitor over the account's own spend
+// plus a daily email subscription thresholded on absolute OR percentage impact), asserts on the outputs,
+// and always destroys via defer.
+//
+// The example deliberately avoids a DIMENSIONAL/SERVICE monitor: AWS allows only one per account and
+// creates it itself, so this test would fail on any account that has Cost Anomaly Detection enabled.
 //
 // Cost Anomaly Detection is free, so this test costs nothing to run.
 //
@@ -34,7 +37,7 @@ func TestCostAnomalyDetectionBasic(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	monitorName := namePrefix + "-services"
+	monitorName := namePrefix + "-account"
 	subscriptionName := namePrefix + "-daily"
 
 	assert.Equal(t, []string{monitorName}, terraform.OutputList(t, terraformOptions, "monitor_names"))
