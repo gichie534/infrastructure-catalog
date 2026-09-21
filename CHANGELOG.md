@@ -8,6 +8,136 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-cost-data-export-v0.1.0
+
+New module: an **AWS Data Exports** export (CUR 2.0 by default) delivered to an existing S3 bucket.
+
+- **Why:** budgets and anomaly detection alert on aggregates — they say *that* spend moved, never which
+  resource moved it. The export is the line-item record that answers the follow-up, and it is **not
+  retroactive**: turn it on today and you get data from today forward. That property is what makes it a
+  foundation concern rather than something to add when a report is requested.
+- **Why a module for one resource:** the resource is the easy half. Data Exports writes as the service
+  principal `bcm-data-exports.amazonaws.com` conditioned on the creating account, and AWS refuses to
+  create the export at all when that bucket-policy grant is missing — surfacing only a generic "Invalid
+  bucket". The module owns the policy alongside the export, which also settles ownership, since S3
+  permits one policy per bucket.
+- **Inputs:** `export_name`, `s3_bucket`, `s3_region` (required); `s3_prefix`, `table`
+  (CUR 2.0 / FOCUS 1.0 / FOCUS 1.2 / cost optimization recommendations / carbon emissions),
+  `table_configurations`, `columns`, `query_statement`, `format`, `compression`, `overwrite`,
+  `manage_bucket_policy`, `source_account_id`, `tags`.
+- **Outputs:** `export_arn`, `export_name`, `s3_uri`, `query_statement` and `table_configurations` (the
+  *resolved* values, so a surprising schema is diagnosable), `required_bucket_policy_json`,
+  `bucket_policy_managed`.
+- **Defaults:** hourly with resource IDs, Parquet, `OVERWRITE_REPORT`. Granularity not captured cannot be
+  recovered later, whereas an export that is too large is one lifecycle rule away from being fine.
+- **Does not create the bucket** — compose with `aws/s3-bucket`, which already owns a hardened baseline
+  and lifecycle rules. The bucket must be dedicated to exports.
+- **Region asymmetry:** the Data Exports control plane is `us-east-1`-only (the calling unit needs a
+  `us-east-1` provider); the destination bucket can live anywhere, hence `s3_region` as an input.
+
+## aws-cost-allocation-v0.1.0
+
+New module: the **allocation layer** — cost allocation tag activation (`aws_ce_cost_allocation_tag`) and
+cost category definitions (`aws_ce_cost_category`).
+
+- **Why:** budgets and anomaly detection can only ever report that an *account* overspent. Allocation
+  metadata is what turns that into a team, an environment, or a product. Both halves answer the same
+  question — whose spend is this? — so they sit in one module.
+- **Why in a foundation:** both are effectively one-way. Tag activation is not retroactive (AWS offers a
+  separate manual backfill), and a cost category applies from its effective month onward. Adding this
+  late does not cost effort, it costs a permanent hole in the history you most want to explain.
+- **Inputs:** `active_cost_allocation_tag_keys` (default `[]`), `cost_categories` (rules matching on a
+  tag key or a Cost Explorer dimension, with `default_value` and `effective_start`), `tags`.
+- **Outputs:** `active_cost_allocation_tag_keys`, `cost_category_arns`, `cost_category_names`,
+  `cost_category_effective_starts`.
+- **Gotcha the input encodes:** AWS only accepts activation for tag keys it has already discovered on a
+  real resource (up to 24h after first use, then up to another 24h to take effect), so listing a
+  brand-new key makes `apply` fail. Hence the empty default rather than something helpful-looking. In an
+  organization, activation is management-account-only.
+
+## aws-cost-anomaly-detection-v0.1.0
+
+New module: **AWS Cost Anomaly Detection** monitors and alert subscriptions.
+
+- **Why:** the complement to `aws/budget`, not a substitute. A budget compares spend to a number you
+  chose; anomaly detection compares it to a model of your own history, catching the shape of problem a
+  limit cannot — a service quietly costing ten times last week's while the monthly total still sits under
+  budget. It is also free.
+- **Both halves in one module** because neither works alone: a monitor with no subscription detects
+  anomalies nobody sees, and a subscription must reference a monitor ARN to exist. Subscriptions name
+  monitors by their **key** in `monitors`, so consumers never handle ARNs.
+- **Inputs:** `monitors` (DIMENSIONAL with `monitor_dimension`, or CUSTOM with `monitor_specification`),
+  `subscriptions` (`frequency`, `monitor_keys` — empty means all, `email_subscribers`, `sns_topic_arns`,
+  `absolute_impact_threshold`, `percentage_impact_threshold`, `threshold_combinator`), `tags`.
+- **Outputs:** `monitor_arns`, `monitor_names`, `subscription_arns`, `subscription_names`,
+  `subscription_monitor_keys` (the resolved coverage, so a subscription that watches nothing is visible).
+- **Validation encodes AWS's channel rule:** `IMMEDIATE` is delivered only via SNS, `DAILY`/`WEEKLY` only
+  by email. The wrong pairing is rejected at plan time instead of producing a subscription that can never
+  deliver. A threshold is required — there is no sensible default dollar figure a module can pick.
+
+## aws-budget-v0.1.0
+
+New module: a single **AWS Budget** and the notification thresholds attached to it.
+
+- **Singular by design.** One module instance is one budget. A budget is a self-contained decision — this
+  limit, over this period, on this slice of spend, telling these people — which makes it the right unit to
+  plan, version and destroy on its own. A consumer wanting several instantiates the module several times,
+  and each keeps its own diff, state and blast radius.
+- **Inputs:** `name`, `limit_amount`, `notifications` (required); `budget_type`, `limit_unit`, `time_unit`,
+  `time_period_start`/`_end`, `cost_filters`, `cost_types`, `subscriber_email_addresses`,
+  `subscriber_sns_topic_arns`, `tags`.
+- **Outputs:** `arn`, `id`, `name`, `notification_count`.
+- **`notifications` is required and validated non-empty.** A budget without one is invisible and AWS
+  creates it happily. Subscribers fall back to the budget-level channel, so it is declared once rather than
+  per threshold; a threshold that still resolves to **no** subscriber fails at plan time, because that is a
+  guardrail you would only discover was mute when the alert never arrived.
+- **Excludes budget actions** (`aws_budgets_budget_action`) on purpose: enforcement needs an IAM role plus
+  either an IAM policy target or an SCP (Organizations-only), and it is a different concern from
+  measurement. Folding it in would hide real blast radius behind an innocuous-looking input.
+
+## aws-sns-topic-v0.1.0
+
+New module: an SNS topic that **AWS services can publish to**, plus optional email subscribers.
+
+- **Why:** creating a topic is trivial; the resource policy is what goes wrong. AWS Budgets and Cost
+  Anomaly Detection publish as their **service principal**, not as your IAM identity, so they need an
+  explicit statement in the topic policy — and when it is missing the publish is denied *silently*. No
+  error surfaces anywhere; the alert simply never arrives.
+- **Inputs:** `name` (required); `display_name`, `kms_master_key_id`, `allowed_service_principals`,
+  `restrict_service_publish_to_source_account`, `include_default_owner_statement`, `topic_policy` (raw
+  JSON escape hatch), `email_subscribers`, `tags`.
+- **Outputs:** `arn`, `name`, `id`, `policy_managed`, `email_subscription_arns`.
+- **`include_default_owner_statement` defaults to `true`** because attaching any topic policy replaces the
+  AWS default — without it you would grant the service and lock out yourself.
+- **Documented traps:** email subscriptions need human confirmation and sit at `PendingConfirmation`
+  until then; `alias/aws/sns` cannot be used for service publishers (its key policy is not editable, and
+  messages are dropped without error); `restrict_service_publish_to_source_account` is off by default
+  because a service that does not populate `aws:SourceAccount` would be silently denied — Budgets
+  documents support for it, Cost Anomaly Detection does not.
+- **Email only, for now.** Other protocols get added when a second consumer needs them (rule of three).
+
+## aws-s3-bucket-v0.3.0
+
+Adds an optional **`lifecycle_rules`** input and a matching `lifecycle_rule_ids` output. Backward
+compatible — the input defaults to `[]`, in which case no lifecycle configuration resource is created at
+all and existing buckets are untouched.
+
+- **Why:** any bucket that accumulates data on a schedule (cost/usage exports, logs, build artefacts)
+  grows without bound, and "keep everything forever" then becomes a cost decision nobody made
+  deliberately. The module could not express retention at all.
+- **New input:** `lifecycle_rules` — a list of `{ id, enabled, prefix, expiration_days,
+  noncurrent_version_expiration_days, abort_incomplete_multipart_upload_days, transitions }`. Validated
+  for unique ids, at least one effective action per rule (a rule that does nothing is rejected), and
+  known transition storage classes.
+- **New resource:** `aws_s3_bucket_lifecycle_configuration.this`, count-gated on the input. Every rule
+  emits a `filter` block even with no prefix (empty prefix = whole bucket) — the provider requires a
+  filter or prefix per rule, and omitting it means a deprecation warning plus perpetual diffs.
+- **New output:** `lifecycle_rule_ids`.
+- **Worth knowing:** `abort_incomplete_multipart_upload_days` cleans up failed multipart uploads, which
+  are billed but invisible in the console. Set it on any bucket that receives large objects.
+- **Tests:** `TestS3BucketBasic` now applies a rule (tier at 30d, expire at 90d, abort at 7d) and asserts
+  the module wired it rather than silently dropping it.
+
 ## gcp-iap-access-v0.2.0
 
 Adds an optional **`cors_allow_http_options`** input to the `gcp/iap-access` module so IAP can let
