@@ -8,6 +8,65 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-cost-data-export-v0.2.0
+
+Fixes an apply-time failure on every CUR 2.0 export, and adds an optional **`billing_view_arn`** input.
+Backward compatible in contract; **not** in behaviour, because v0.1.0 could not complete an apply.
+
+- **The bug:** AWS injects a `BILLING_VIEW_ARN` entry into the table configuration it stores, while the
+  provider compares `table_configurations` exactly. An apply that did not send the key therefore failed:
+
+  ```
+  Provider produced inconsistent result after apply
+  .export[0].data_query[0].table_configurations["COST_AND_USAGE_REPORT"]:
+  new element "BILLING_VIEW_ARN" has appeared.
+  ```
+
+  The export is created *before* that check runs, so the failure left a real export in the account plus a
+  tainted plan — the worst shape of failure, since it looks like nothing worked.
+- **The fix:** resolve the account's PRIMARY billing view with the `aws_billing_views` data source and send
+  `BILLING_VIEW_ARN` in the table configuration, so config and API response agree. Applied to the
+  billing-view-scoped tables only (CUR 2.0, FOCUS 1.0, FOCUS 1.2); the recommendation and carbon-emissions
+  tables are untouched. A consumer-supplied `BILLING_VIEW_ARN` in `table_configurations` still wins.
+- **New input:** `billing_view_arn` (default null = discover PRIMARY). Set it to export an AWS Billing
+  Conductor pro-forma view rather than the real bill. Validated against the billing view ARN pattern.
+- **New output:** `billing_view_arn` — the view actually used; null for tables that are not billing-view
+  scoped.
+- **New permission requirement:** `billing:ListBillingViews`.
+- **Provider constraint raised** to `>= 6.0` for the `aws_billing_views` data source.
+- **Why discovered rather than constructed:** the ARN could be assembled from partition and account id, but
+  that hardcodes a format AWS owns. The data source is parameterless, so it costs nothing in purity.
+
+## aws-cost-anomaly-detection-v0.2.0
+
+Adds a **`monitor_arns`** field to `subscriptions` so alerts can be attached to monitors this module does
+not manage, and makes `monitors` optional (default `{}`). Backward compatible: an existing consumer that
+declares monitors and omits `monitor_arns` behaves exactly as before.
+
+- **Why:** AWS allows exactly **one** AWS-managed monitor for AWS services
+  [per account](https://docs.aws.amazon.com/cost-management/latest/userguide/management-limits.html), and
+  creates it for you when Cost Anomaly Detection is enabled. v0.1.0 could only *create* monitors, so on any
+  real account the obvious configuration — a `DIMENSIONAL`/`SERVICE` monitor — failed with
+  `ValidationException: Limit exceeded on dimensional spend monitor creation`. The fix is not a quota
+  increase but a change of ownership model: the managed monitor is account infrastructure AWS owns, while
+  the subscriptions (who is told, at what threshold, how often) are the consumer's.
+- **New field:** `subscriptions[*].monitor_arns` (list of ARNs). Unioned with the ARNs resolved from
+  `monitor_keys`. When both are empty the subscription still covers every monitor in `monitors`; setting
+  either means "exactly what I listed", so the implicit "all" never silently joins an explicit list.
+- **Changed default:** `monitors` now defaults to `{}`, and a monitor's `monitor_type` defaults to `CUSTOM`
+  rather than `DIMENSIONAL` — customer-managed monitors are capped at 500 per account, so they compose;
+  dimensional ones do not. `monitor_dimension` no longer defaults to `SERVICE`, since it only applies to
+  DIMENSIONAL monitors and defaulting it invited exactly the failure above.
+- **New precondition:** a subscription covering no monitors at all fails at plan time. That becomes the
+  natural mistake once `monitors` can be empty — declare subscriptions, forget to say what they watch.
+- **New validations, both AWS quotas:** at most 1 SNS topic and 10 email recipients per subscription. Fan
+  out from the topic, not the subscription.
+- **New output:** `subscription_monitor_arns` — every monitor ARN each subscription covers, managed and
+  adopted alike.
+- **Example/test:** `examples/basic` now creates a `CUSTOM` monitor scoped to the caller's own account
+  instead of a `DIMENSIONAL`/`SERVICE` one, so the Terratest passes on an account that already has the
+  managed monitor — which is to say, on any account.
+
 ## aws-cost-data-export-v0.1.0
 
 New module: an **AWS Data Exports** export (CUR 2.0 by default) delivered to an existing S3 bucket.
