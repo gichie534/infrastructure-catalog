@@ -50,6 +50,64 @@ variable "cors_rules" {
   default  = []
 }
 
+variable "lifecycle_rules" {
+  description = <<-EOT
+    Optional object-lifecycle rules. Empty (default) creates no lifecycle configuration at all, so
+    existing consumers are unaffected. Each rule needs a unique `id`; every other field is optional,
+    and a rule that sets none of the expiry/transition fields is rejected (it would be a no-op).
+
+    `prefix` scopes the rule to a key prefix — null or "" applies it to every object in the bucket.
+    `transitions` moves objects to a cheaper storage class after N days (e.g. STANDARD_IA at 30,
+    GLACIER_IR at 90); `expiration_days` deletes them outright.
+    `abort_incomplete_multipart_upload_days` cleans up failed multipart uploads, which are invisible
+    in the console but still billed — worth setting on any bucket that receives large objects.
+
+    Typical use: keep a cost/usage export or log bucket from growing without bound.
+  EOT
+  type = list(object({
+    id                                     = string
+    enabled                                = optional(bool, true)
+    prefix                                 = optional(string, null)
+    expiration_days                        = optional(number, null)
+    noncurrent_version_expiration_days     = optional(number, null)
+    abort_incomplete_multipart_upload_days = optional(number, null)
+    transitions = optional(list(object({
+      days          = number
+      storage_class = string
+    })), [])
+  }))
+  nullable = false
+  default  = []
+
+  validation {
+    condition     = length(distinct([for r in var.lifecycle_rules : r.id])) == length(var.lifecycle_rules)
+    error_message = "each lifecycle rule id must be unique."
+  }
+
+  validation {
+    condition = alltrue([
+      for r in var.lifecycle_rules :
+      r.expiration_days != null ||
+      r.noncurrent_version_expiration_days != null ||
+      r.abort_incomplete_multipart_upload_days != null ||
+      length(r.transitions) > 0
+    ])
+    error_message = "each lifecycle rule must set at least one of expiration_days, noncurrent_version_expiration_days, abort_incomplete_multipart_upload_days, or transitions."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for r in var.lifecycle_rules : [
+        for t in r.transitions : contains(
+          ["STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "GLACIER_IR", "GLACIER", "DEEP_ARCHIVE"],
+          t.storage_class
+        )
+      ]
+    ]))
+    error_message = "transition storage_class must be one of STANDARD_IA, ONEZONE_IA, INTELLIGENT_TIERING, GLACIER_IR, GLACIER, DEEP_ARCHIVE."
+  }
+}
+
 variable "tags" {
   description = "Tags applied to the S3 bucket."
   type        = map(string)

@@ -58,6 +58,22 @@ module "s3_bucket" {
   force_destroy = true
   bucket_policy = data.aws_iam_policy_document.abac.json
 
+  # Keep the bucket from growing without bound: tier objects down after a month, delete them after a
+  # quarter, and clean up multipart uploads that never completed (billed but invisible).
+  lifecycle_rules = [
+    {
+      id                                     = "expire-and-tier"
+      expiration_days                        = 90
+      abort_incomplete_multipart_upload_days = 7
+      transitions = [
+        {
+          days          = 30
+          storage_class = "STANDARD_IA"
+        },
+      ]
+    },
+  ]
+
   tags = {
     Project     = "demo"
     Environment = "example"
@@ -73,4 +89,9 @@ output "bucket" {
 output "arn" {
   description = "ARN of the created bucket."
   value       = module.s3_bucket.arn
+}
+
+output "lifecycle_rule_ids" {
+  description = "IDs of the lifecycle rules managed on the bucket."
+  value       = module.s3_bucket.lifecycle_rule_ids
 }
