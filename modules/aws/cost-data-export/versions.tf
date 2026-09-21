@@ -4,8 +4,10 @@ terraform {
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.40"
+      source = "hashicorp/aws"
+      # 6.0 for the aws_billing_views data source, which the module uses to resolve the account's PRIMARY
+      # billing view — see the BILLING_VIEW_ARN note in main.tf.
+      version = ">= 6.0"
     }
   }
 }

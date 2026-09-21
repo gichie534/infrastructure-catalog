@@ -154,6 +154,30 @@ variable "manage_bucket_policy" {
   default     = true
 }
 
+variable "billing_view_arn" {
+  description = <<-EOT
+    Billing view the export reads from. Null (default) resolves the account's PRIMARY view — the default
+    view over its own bill — via the `aws_billing_views` data source.
+
+    You rarely need to set this. It exists for two reasons: to point an export at an AWS Billing Conductor
+    pro-forma view instead of the real bill, and because the value has to be sent explicitly at all. AWS
+    injects a `BILLING_VIEW_ARN` entry into the table configuration it stores, and the provider compares
+    `table_configurations` exactly, so an apply that omits it fails with "Provider produced inconsistent
+    result after apply". The module sends it for the billing-view-scoped tables (CUR 2.0 and both FOCUS
+    tables) to keep config and API response in agreement.
+
+    Resolving it needs `billing:ListBillingViews`.
+  EOT
+  type        = string
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.billing_view_arn == null || can(regex("^arn:aws[a-z-]*:billing::[0-9]{12}:billingview/", var.billing_view_arn))
+    error_message = "billing_view_arn must be a billing view ARN, e.g. arn:aws:billing::123456789012:billingview/primary."
+  }
+}
+
 variable "source_account_id" {
   description = "Account that owns the export, used in the bucket policy's `aws:SourceArn` / `aws:SourceAccount` conditions. Null (default) uses the calling account."
   type        = string

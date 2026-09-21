@@ -16,6 +16,24 @@
 data "aws_partition" "current" {}
 data "aws_caller_identity" "current" {}
 
+# The account's PRIMARY billing view — the default view over its own bill.
+#
+# Needed because of a provider/API mismatch, not because the export needs configuring. AWS injects a
+# `BILLING_VIEW_ARN` entry into the table configuration it stores, but the provider treats
+# `table_configurations` as a map it must match exactly, so an apply that does not send that key fails with:
+#
+#   Provider produced inconsistent result after apply ...
+#   table_configurations["COST_AND_USAGE_REPORT"]: new element "BILLING_VIEW_ARN" has appeared.
+#
+# The export is created before that check runs, so the failure leaves a real export behind and a tainted
+# plan. Sending the key ourselves makes config and response agree. Discovered rather than constructed, so
+# no ARN format is hardcoded — and overridable via `billing_view_arn` for a Billing Conductor pro-forma view.
+data "aws_billing_views" "primary" {
+  count = local.needs_billing_view && var.billing_view_arn == null ? 1 : 0
+
+  billing_view_types = ["PRIMARY"]
+}
+
 locals {
   account_id = var.source_account_id != null ? var.source_account_id : data.aws_caller_identity.current.account_id
 
@@ -74,10 +92,27 @@ locals {
     : "SELECT ${join(", ", local.columns)} FROM ${var.table}"
   )
 
-  table_configurations = (
+  requested_table_configurations = (
     var.table_configurations != null
     ? var.table_configurations
     : lookup(local.default_table_configurations, var.table, {})
+  )
+
+  # Tables that are scoped to a billing view, and therefore get BILLING_VIEW_ARN echoed back by AWS. The
+  # recommendation and carbon-emissions tables are not billing-view scoped, so they are left alone.
+  needs_billing_view = contains(["COST_AND_USAGE_REPORT", "FOCUS_1_0_AWS", "FOCUS_1_2_AWS"], var.table)
+
+  billing_view_arn = (
+    var.billing_view_arn != null
+    ? var.billing_view_arn
+    : (local.needs_billing_view ? one(data.aws_billing_views.primary[0].billing_view).arn : null)
+  )
+
+  # A consumer-supplied BILLING_VIEW_ARN wins; otherwise inject the resolved one.
+  table_configurations = (
+    local.needs_billing_view
+    ? merge({ BILLING_VIEW_ARN = local.billing_view_arn }, local.requested_table_configurations)
+    : local.requested_table_configurations
   )
 }
 

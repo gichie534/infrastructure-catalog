@@ -44,6 +44,12 @@ func TestCostDataExportBasic(t *testing.T) {
 
 	assert.Equal(t, "s3://"+bucketName+"/cur2", terraform.Output(t, terraformOptions, "s3_uri"))
 
+	// Reaching this point at all is the assertion that matters for BILLING_VIEW_ARN: if the module failed
+	// to send it, the apply above would have died on "Provider produced inconsistent result after apply".
+	billingViewArn := terraform.Output(t, terraformOptions, "billing_view_arn")
+	assert.Contains(t, billingViewArn, ":billingview/",
+		"expected a resolved billing view ARN, got %q", billingViewArn)
+
 	// The module builds the SQL from its curated column list when the consumer supplies none. A wrong
 	// table name or an empty column list would produce a valid-looking export with the wrong schema.
 	query := terraform.Output(t, terraformOptions, "query_statement")

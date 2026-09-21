@@ -19,8 +19,13 @@ output "query_statement" {
 }
 
 output "table_configurations" {
-  description = "The table configuration actually applied (granularity, resource inclusion, …), after defaults are resolved."
+  description = "The table configuration actually applied (granularity, resource inclusion, billing view, …), after defaults are resolved."
   value       = local.table_configurations
+}
+
+output "billing_view_arn" {
+  description = "Billing view the export reads from — the account's PRIMARY view unless overridden. Null for tables that are not billing-view scoped."
+  value       = local.billing_view_arn
 }
 
 output "required_bucket_policy_json" {

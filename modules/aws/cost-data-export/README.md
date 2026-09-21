@@ -38,6 +38,13 @@ baseline and lifecycle rules.
   matters more than answerability.
 - **`OVERWRITE_REPORT` is the default.** `CREATE_NEW_REPORT` keeps every version, and refreshes happen
   several times a day, so storage grows accordingly.
+- **The module sends `BILLING_VIEW_ARN` for you, and has to.** AWS injects that key into the table
+  configuration it stores, while the provider compares `table_configurations` exactly — so an apply that
+  omits it fails with *"Provider produced inconsistent result after apply: new element BILLING_VIEW_ARN has
+  appeared"*, **after** creating the export. The module resolves the account's PRIMARY billing view via the
+  `aws_billing_views` data source and sends it, so config and response agree. This needs
+  `billing:ListBillingViews`. Override with `billing_view_arn` to export a Billing Conductor pro-forma view
+  instead of the real bill.
 - **The curated column list is a starting point, not the schema.** See the
   [Data Exports table dictionary](https://docs.aws.amazon.com/cur/latest/userguide/dataexports-table-dictionary.html)
   and extend `columns` — the `savings_plan_*` and `reservation_*` families become relevant once you hold
@@ -77,7 +84,7 @@ module "cost_data_export" {
 | Name | Version |
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.40 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0 |
 
 ## Providers
 
@@ -95,6 +102,7 @@ No modules.
 | ---- | ---- |
 | [aws_bcmdataexports_export.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bcmdataexports_export) | resource |
 | [aws_s3_bucket_policy.delivery](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_billing_views.primary](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/billing_views) | data source |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.delivery](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
@@ -103,6 +111,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_billing_view_arn"></a> [billing\_view\_arn](#input\_billing\_view\_arn) | Billing view the export reads from. Null (default) resolves the account's PRIMARY view — the default<br/>view over its own bill — via the `aws_billing_views` data source.<br/><br/>You rarely need to set this. It exists for two reasons: to point an export at an AWS Billing Conductor<br/>pro-forma view instead of the real bill, and because the value has to be sent explicitly at all. AWS<br/>injects a `BILLING_VIEW_ARN` entry into the table configuration it stores, and the provider compares<br/>`table_configurations` exactly, so an apply that omits it fails with "Provider produced inconsistent<br/>result after apply". The module sends it for the billing-view-scoped tables (CUR 2.0 and both FOCUS<br/>tables) to keep config and API response in agreement.<br/><br/>Resolving it needs `billing:ListBillingViews`. | `string` | `null` | no |
 | <a name="input_columns"></a> [columns](#input\_columns) | Columns to select from the table. Empty (default) uses the module's curated column list for the<br/>chosen table; tables with no curated list require either this input or `query_statement`.<br/><br/>Selecting columns rather than everything is the point of Data Exports: a narrower export is cheaper<br/>to store and query, and it lets you leave sensitive cost detail out of a dataset you intend to share<br/>more widely. | `list(string)` | `[]` | no |
 | <a name="input_compression"></a> [compression](#input\_compression) | Compression: PARQUET (default) or GZIP. AWS pairs these with the format — PARQUET format requires PARQUET compression, TEXT\_OR\_CSV requires GZIP. The module validates the pairing. | `string` | `"PARQUET"` | no |
 | <a name="input_export_name"></a> [export\_name](#input\_export\_name) | Name of the data export. Unique per account. | `string` | n/a | yes |
@@ -122,11 +131,12 @@ No modules.
 
 | Name | Description |
 | ---- | ----------- |
+| <a name="output_billing_view_arn"></a> [billing\_view\_arn](#output\_billing\_view\_arn) | Billing view the export reads from — the account's PRIMARY view unless overridden. Null for tables that are not billing-view scoped. |
 | <a name="output_bucket_policy_managed"></a> [bucket\_policy\_managed](#output\_bucket\_policy\_managed) | Whether this module attached the delivery bucket policy. |
 | <a name="output_export_arn"></a> [export\_arn](#output\_export\_arn) | ARN of the data export. |
 | <a name="output_export_name"></a> [export\_name](#output\_export\_name) | Name of the data export. |
 | <a name="output_query_statement"></a> [query\_statement](#output\_query\_statement) | The SQL statement actually sent to Data Exports, after column defaults are resolved. Useful when an export delivers a different schema than you expected. |
 | <a name="output_required_bucket_policy_json"></a> [required\_bucket\_policy\_json](#output\_required\_bucket\_policy\_json) | The bucket policy Data Exports requires. Attach this yourself when `manage_bucket_policy` is false — without it AWS refuses to create the export. |
 | <a name="output_s3_uri"></a> [s3\_uri](#output\_s3\_uri) | S3 URI the export is delivered to. The first objects appear within roughly 24 hours of creation, not immediately. |
-| <a name="output_table_configurations"></a> [table\_configurations](#output\_table\_configurations) | The table configuration actually applied (granularity, resource inclusion, …), after defaults are resolved. |
+| <a name="output_table_configurations"></a> [table\_configurations](#output\_table\_configurations) | The table configuration actually applied (granularity, resource inclusion, billing view, …), after defaults are resolved. |
 <!-- END_TF_DOCS -->

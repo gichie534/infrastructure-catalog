@@ -68,6 +68,11 @@ output "query_statement" {
   value       = module.cost_data_export.query_statement
 }
 
+output "billing_view_arn" {
+  description = "Billing view the export reads from (the account's PRIMARY view)."
+  value       = module.cost_data_export.billing_view_arn
+}
+
 output "bucket" {
   description = "Destination bucket name."
   value       = module.export_bucket.bucket
