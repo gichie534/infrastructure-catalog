@@ -8,6 +8,79 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## gcp-ha-vpn-tunnels-v0.1.0
+
+New module: **phase 3** of an HA VPN peering — the external VPN gateway describing the peer, a
+dedicated Cloud Router for BGP, and one tunnel + router interface + BGP peer per tunnel.
+
+- **Consumes** an existing HA VPN gateway (`gcp/ha-vpn-gateway`) rather than creating one, so the
+  two-phase ordering a non-Google peering requires stays in the dependency graph.
+- **Inputs:** `name`, `project_id`, `region`, `network`, `ha_vpn_gateway`, `peer_gateway_interfaces`,
+  `tunnels`, `tunnel_shared_secrets` (required); `bgp_asn` (default 65001), `advertise_all_subnets`
+  (default true), `advertised_ip_ranges`, `ike_version` (default 2), `router_name`,
+  `keepalive_interval`.
+- **Outputs:** `external_gateway_id`/`_name`, `redundancy_type`, `router_name`/`router_id`, `bgp_asn`,
+  `tunnel_names`, `tunnel_self_links`, `bgp_peer_names`, `advertised_ip_ranges`.
+- **Why pre-shared keys are a separate input:** Terraform **cannot evaluate `for_each` over a
+  sensitive value**. The per-tunnel map therefore has to be built from non-sensitive addressing
+  (`tunnels`) with the key looked up positionally from a sensitive list (`tunnel_shared_secrets`).
+  Folding the keys into `tunnels` reads better and does not plan.
+- **`redundancy_type` is derived**, not an input: Google accepts only 1, 2, or 4 peer interfaces, and
+  the count already determines the answer. Validation rejects 3 rather than letting the API do it.
+- **The trap `advertised_ip_ranges` exists for:** GKE Pods live in a subnet **secondary** range, which
+  is not a subnet and so is never covered by `advertise_all_subnets`. GKE also does not masquerade Pod
+  traffic to RFC 1918 destinations, so a Pod reaching the peer arrives with its **Pod** address and the
+  peer has no return route — a hang, not a refusal. On Autopilot the `ip-masq-agent` ConfigMap is not
+  editable, making this the only in-Terraform fix.
+- **A dedicated Cloud Router** is created rather than reusing a Cloud NAT router: sharing works, but it
+  couples an egress concern to a connectivity one and makes either harder to remove.
+- **Cost:** Cloud VPN tunnels are billed hourly from creation, whether or not they establish.
+
+## gcp-ha-vpn-gateway-v0.1.0
+
+New module: a Cloud **HA VPN gateway** — two interfaces, each with a Google-assigned external IPv4
+address — and nothing else.
+
+- **Inputs:** `name`, `project_id`, `region`, `network` (required); `stack_type` (default
+  `IPV4_ONLY`, the only stack an AWS Site-to-Site VPN peer supports).
+- **Outputs:** `id`, `name`, `self_link`, `region`, `interface_ip_addresses` (ordered by interface ID).
+- **Why a module for one resource:** peering HA VPN with a non-Google gateway is inherently two-phase —
+  each side needs an address the other produces only once it exists. Splitting the gateway from its
+  tunnels lets a consumer express `gateway -> peer -> tunnels` with ordinary dependency wiring instead
+  of a targeted apply or a two-pass workaround.
+- The gateway itself is not billed; only tunnels are.
+
+## aws-site-to-site-vpn-v0.1.0
+
+New module: the **AWS half** of a BGP-routed IPsec VPN to a peer gateway in another network — virtual
+private gateway, one customer gateway and one VPN connection **per peer interface**, and VGW route
+propagation.
+
+- **Inputs:** `name`, `vpc_id`, `peer_gateway_ip_addresses` (required); `peer_bgp_asn` (default 65001),
+  `amazon_side_asn` (default 64512), `route_table_ids`, `static_routes_only` (default false),
+  `ike_versions` (default `["ikev2"]`), `tunnel_startup_action` (default `start`),
+  `tunnel_inside_cidrs`, `tunnel_preshared_keys` (both optional overrides), `local_ipv4_network_cidr`,
+  `remote_ipv4_network_cidr`, `tags`.
+- **Outputs:** `vpn_gateway_id`, `amazon_side_asn`, `customer_gateway_ids`, `vpn_connection_ids`,
+  `tunnel_outside_addresses`, and `tunnels` — the full per-tunnel description a peer is configured
+  from (outside address, the link-local `/30`, both inside addresses, both ASNs, the pre-shared key).
+- **`tunnels` is sensitive as a whole** because it carries pre-shared keys; `tunnel_outside_addresses`
+  stays non-sensitive so connectivity can be diagnosed without unredacting anything.
+- **One connection per peer interface, not one in total.** A Google Cloud HA VPN gateway's two
+  interfaces each source traffic from their **own** address, and AWS accepts traffic only from the
+  address its customer gateway names — so a single connection cannot serve both. AWS then builds two
+  tunnels per connection; an HA VPN peer uses `tunnel_index == 1` of each and the second stays `DOWN`,
+  which is expected rather than a fault.
+- **`route_table_ids` is the input that is easy to miss.** Omit it and the tunnels establish, BGP
+  exchanges routes, and traffic still fails — presenting as a one-way network rather than a missing
+  route. It is the module's job to make that step nameable.
+- **`amazon_side_asn` is set explicitly** rather than left to AWS's default, so the peer's BGP
+  neighbour ASN is deterministic instead of discovered after the fact.
+- **`cgw_inside_address_cidr`** is emitted alongside the bare address because a peer router interface
+  is configured with address **and** mask while AWS returns them separately. The prefix is read from
+  the tunnel's inside CIDR, not hardcoded to `/30`.
+- **Cost:** a VPN connection is billed hourly from creation, whether or not its tunnels are up.
+
 ## aws-cost-data-export-v0.2.0
 
 Fixes an apply-time failure on every CUR 2.0 export, and adds an optional **`billing_view_arn`** input.
