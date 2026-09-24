@@ -10,14 +10,14 @@ variable "name" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes minor version for the control plane (e.g. 1.31). Node groups inherit this version."
+  description = "Kubernetes minor version for the control plane (e.g. 1.36). Node groups inherit this version. Defaults to the newest version on EKS standard support at the time of release; check the EKS release calendar before reusing an older pin, because a version past end-of-extended-support is upgraded automatically and no longer under your control."
   type        = string
   nullable    = false
-  default     = "1.31"
+  default     = "1.36"
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be a MAJOR.MINOR version (e.g. 1.31)."
+    error_message = "kubernetes_version must be a MAJOR.MINOR version (e.g. 1.36)."
   }
 }
 

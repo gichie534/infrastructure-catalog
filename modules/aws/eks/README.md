@@ -16,7 +16,7 @@ module "eks" {
   source = "git::https://github.com/<github-org>/infrastructure-catalog.git//modules/aws/eks?ref=vX.Y.Z"
 
   name               = "platform"
-  kubernetes_version = "1.31"
+  kubernetes_version = "1.36"
 
   subnet_ids = module.vpc.private_subnet_ids
 
@@ -55,7 +55,7 @@ module "eks" {
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.50.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.53.0 |
 
 ## Modules
 
@@ -84,7 +84,7 @@ No modules.
 | <a name="input_endpoint_private_access"></a> [endpoint\_private\_access](#input\_endpoint\_private\_access) | Whether the Kubernetes API server is reachable privately from within the VPC. | `bool` | `true` | no |
 | <a name="input_endpoint_public_access"></a> [endpoint\_public\_access](#input\_endpoint\_public\_access) | Whether the Kubernetes API server is reachable from the public internet (locked down with endpoint\_public\_access\_cidrs). | `bool` | `true` | no |
 | <a name="input_endpoint_public_access_cidrs"></a> [endpoint\_public\_access\_cidrs](#input\_endpoint\_public\_access\_cidrs) | CIDR blocks allowed to reach the public API server endpoint. Only used when endpoint\_public\_access is true. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
-| <a name="input_kubernetes_version"></a> [kubernetes\_version](#input\_kubernetes\_version) | Kubernetes minor version for the control plane (e.g. 1.31). Node groups inherit this version. | `string` | `"1.31"` | no |
+| <a name="input_kubernetes_version"></a> [kubernetes\_version](#input\_kubernetes\_version) | Kubernetes minor version for the control plane (e.g. 1.36). Node groups inherit this version. Defaults to the newest version on EKS standard support at the time of release; check the EKS release calendar before reusing an older pin, because a version past end-of-extended-support is upgraded automatically and no longer under your control. | `string` | `"1.36"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the EKS cluster, used as the prefix for its IAM roles, node groups, and related resources. | `string` | n/a | yes |
 | <a name="input_node_groups"></a> [node\_groups](#input\_node\_groups) | Managed node groups to create, keyed by name. Each group runs in the cluster's subnets and<br/>scales between min\_size and max\_size. instance\_types and capacity\_type (ON\_DEMAND or SPOT)<br/>are per group. | <pre>map(object({<br/>    instance_types = optional(list(string), ["t3.medium"])<br/>    capacity_type  = optional(string, "ON_DEMAND")<br/>    desired_size   = optional(number, 2)<br/>    min_size       = optional(number, 1)<br/>    max_size       = optional(number, 3)<br/>    disk_size      = optional(number, 20)<br/>    labels         = optional(map(string), {})<br/>  }))</pre> | <pre>{<br/>  "default": {}<br/>}</pre> | no |
 | <a name="input_subnet_ids"></a> [subnet\_ids](#input\_subnet\_ids) | Subnet IDs for the cluster control plane ENIs and the worker nodes. Use private subnets for nodes. Wire to the vpc module's private\_subnet\_ids. | `list(string)` | n/a | yes |
