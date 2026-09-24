@@ -23,3 +23,8 @@ output "network_self_link" {
   description = "Self link of the VPC the cluster runs in."
   value       = module.vpc.network_self_link
 }
+
+output "node_service_account_email" {
+  description = "Email of the dedicated service account the cluster's nodes run as."
+  value       = module.gke.node_service_account_email
+}

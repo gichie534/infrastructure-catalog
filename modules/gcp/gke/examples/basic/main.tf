@@ -42,6 +42,11 @@ module "gke" {
   enable_private_endpoint    = false
   master_authorized_networks = var.master_authorized_networks
 
+  # Give the nodes their own least-privilege identity instead of relying on the project's Compute
+  # Engine default service account, which on a modern project holds no roles and leaves the cluster
+  # unable to register a single node.
+  create_node_service_account = true
+
   # Examples/tests must be destroyable.
   deletion_protection = false
 }

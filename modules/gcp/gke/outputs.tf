@@ -29,3 +29,8 @@ output "self_link" {
   description = "The server-defined URL (self link) of the cluster."
   value       = google_container_cluster.this.self_link
 }
+
+output "node_service_account_email" {
+  description = "Email of the service account the cluster's nodes run as. Null when the cluster falls back to the project's Compute Engine default service account (create_node_service_account false and node_service_account unset)."
+  value       = local.node_service_account_email
+}

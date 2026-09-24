@@ -155,3 +155,60 @@ variable "secret_sync_rotation" {
     error_message = "secret_sync_rotation.rotation_interval must be a duration string in seconds, e.g. \"120s\"."
   }
 }
+
+variable "create_node_service_account" {
+  description = <<-EOT
+    Create a dedicated, least-privilege service account for the cluster's nodes and grant it
+    node_service_account_roles on project_id. When false (the default, which preserves the behaviour
+    of earlier versions of this module) GKE falls back to the project's Compute Engine default
+    service account.
+
+    That fallback is a trap on projects created after Google stopped automatically granting
+    roles/editor to the Compute Engine default service account (and on any project where the
+    iam.automaticIamGrantsForDefaultServiceAccounts org policy is enforced): the default account then
+    holds no roles at all, nodes boot but cannot register, the control plane deletes them, and the
+    cluster sits RUNNING with zero nodes while every pod stays Pending. The console surfaces this
+    only as an advisory to "grant roles/container.defaultNodeServiceAccount to the Node service
+    account".
+
+    Set this true to make the node identity explicit and owned by Terraform. Takes precedence over
+    node_service_account.
+  EOT
+  type        = bool
+  nullable    = false
+  default     = false
+}
+
+variable "node_service_account" {
+  description = "Email of an existing service account to run the cluster's nodes as. It must already hold roles/container.defaultNodeServiceAccount on the project. Ignored when create_node_service_account is true. Leave null to let GKE use the Compute Engine default service account."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.node_service_account == null || can(regex("^[^@]+@[^@]+\\.iam\\.gserviceaccount\\.com$|^[^@]+@developer\\.gserviceaccount\\.com$", var.node_service_account))
+    error_message = "node_service_account must be a service account email, e.g. nodes@my-project.iam.gserviceaccount.com."
+  }
+}
+
+variable "node_service_account_id" {
+  description = "Account ID (the local part of the email) for the service account created when create_node_service_account is true. Defaults to \"<name>-nodes\", truncated to the 30-character limit."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.node_service_account_id == null || can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.node_service_account_id))
+    error_message = "node_service_account_id must be 6-30 characters, lowercase letters, numbers or hyphens, start with a letter, and not end with a hyphen."
+  }
+}
+
+variable "node_service_account_roles" {
+  description = "Project-level roles granted to the service account created when create_node_service_account is true. The default is the minimum GKE requires for nodes to register and run system tasks such as logging, monitoring and image pulls; add to it for workloads that need more (e.g. roles/artifactregistry.reader for a private registry in another project)."
+  type        = list(string)
+  nullable    = false
+  default     = ["roles/container.defaultNodeServiceAccount"]
+
+  validation {
+    condition     = alltrue([for r in var.node_service_account_roles : can(regex("^(roles/|projects/[^/]+/roles/|organizations/[0-9]+/roles/)", r))])
+    error_message = "every entry in node_service_account_roles must be a role name, e.g. roles/container.defaultNodeServiceAccount."
+  }
+}

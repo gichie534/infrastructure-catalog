@@ -42,7 +42,7 @@ module "gke" {
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_google"></a> [google](#provider\_google) | 7.43.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | 8.4.0 |
 
 ## Modules
 
@@ -53,11 +53,14 @@ No modules.
 | Name | Type |
 | ---- | ---- |
 | [google_container_cluster.this](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/container_cluster) | resource |
+| [google_project_iam_member.node](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/project_iam_member) | resource |
+| [google_service_account.node](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/service_account) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_create_node_service_account"></a> [create\_node\_service\_account](#input\_create\_node\_service\_account) | Create a dedicated, least-privilege service account for the cluster's nodes and grant it<br/>node\_service\_account\_roles on project\_id. When false (the default, which preserves the behaviour<br/>of earlier versions of this module) GKE falls back to the project's Compute Engine default<br/>service account.<br/><br/>That fallback is a trap on projects created after Google stopped automatically granting<br/>roles/editor to the Compute Engine default service account (and on any project where the<br/>iam.automaticIamGrantsForDefaultServiceAccounts org policy is enforced): the default account then<br/>holds no roles at all, nodes boot but cannot register, the control plane deletes them, and the<br/>cluster sits RUNNING with zero nodes while every pod stays Pending. The console surfaces this<br/>only as an advisory to "grant roles/container.defaultNodeServiceAccount to the Node service<br/>account".<br/><br/>Set this true to make the node identity explicit and owned by Terraform. Takes precedence over<br/>node\_service\_account. | `bool` | `false` | no |
 | <a name="input_deletion_protection"></a> [deletion\_protection](#input\_deletion\_protection) | Whether the cluster is protected from deletion via Terraform. Keep true for real environments; examples/tests set it false. | `bool` | `true` | no |
 | <a name="input_enable_private_endpoint"></a> [enable\_private\_endpoint](#input\_enable\_private\_endpoint) | When true, the control plane is reachable only via its private endpoint. Default false keeps a public endpoint (locked down with master\_authorized\_networks) while nodes stay private. | `bool` | `false` | no |
 | <a name="input_enable_secret_manager_addon"></a> [enable\_secret\_manager\_addon](#input\_enable\_secret\_manager\_addon) | Enable the GKE-managed Secret Manager add-on (the Google-managed build of the Secrets Store CSI Driver and its GCP provider). When true, pods may mount Secret Manager secrets as files via a SecretProviderClass referencing the secrets-store-gke.csi.k8s.io driver. Disabled by default to keep the cluster minimal. | `bool` | `false` | no |
@@ -66,6 +69,9 @@ No modules.
 | <a name="input_master_ipv4_cidr_block"></a> [master\_ipv4\_cidr\_block](#input\_master\_ipv4\_cidr\_block) | The /28 CIDR range for the cluster's hosted control plane. Must not overlap with subnet or secondary ranges. | `string` | `"172.16.0.0/28"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the GKE cluster. | `string` | n/a | yes |
 | <a name="input_network"></a> [network](#input\_network) | Self link or name of the VPC network to attach the cluster to. Wire this to the vpc module's network\_self\_link output. | `string` | n/a | yes |
+| <a name="input_node_service_account"></a> [node\_service\_account](#input\_node\_service\_account) | Email of an existing service account to run the cluster's nodes as. It must already hold roles/container.defaultNodeServiceAccount on the project. Ignored when create\_node\_service\_account is true. Leave null to let GKE use the Compute Engine default service account. | `string` | `null` | no |
+| <a name="input_node_service_account_id"></a> [node\_service\_account\_id](#input\_node\_service\_account\_id) | Account ID (the local part of the email) for the service account created when create\_node\_service\_account is true. Defaults to "<name>-nodes", truncated to the 30-character limit. | `string` | `null` | no |
+| <a name="input_node_service_account_roles"></a> [node\_service\_account\_roles](#input\_node\_service\_account\_roles) | Project-level roles granted to the service account created when create\_node\_service\_account is true. The default is the minimum GKE requires for nodes to register and run system tasks such as logging, monitoring and image pulls; add to it for workloads that need more (e.g. roles/artifactregistry.reader for a private registry in another project). | `list(string)` | <pre>[<br/>  "roles/container.defaultNodeServiceAccount"<br/>]</pre> | no |
 | <a name="input_pods_range_name"></a> [pods\_range\_name](#input\_pods\_range\_name) | Name of the subnetwork secondary range to use for Pod IPs (VPC-native alias IPs). Matches the vpc module's pods\_range\_name. | `string` | `"pods"` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The ID of the project in which to create the cluster. | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | Region for the regional Autopilot cluster (e.g. us-central1). | `string` | n/a | yes |
@@ -85,5 +91,6 @@ No modules.
 | <a name="output_cluster_name"></a> [cluster\_name](#output\_cluster\_name) | The name of the GKE cluster. |
 | <a name="output_endpoint"></a> [endpoint](#output\_endpoint) | The IP address of the cluster's Kubernetes API server. |
 | <a name="output_location"></a> [location](#output\_location) | The region the cluster runs in. |
+| <a name="output_node_service_account_email"></a> [node\_service\_account\_email](#output\_node\_service\_account\_email) | Email of the service account the cluster's nodes run as. Null when the cluster falls back to the project's Compute Engine default service account (create\_node\_service\_account false and node\_service\_account unset). |
 | <a name="output_self_link"></a> [self\_link](#output\_self\_link) | The server-defined URL (self link) of the cluster. |
 <!-- END_TF_DOCS -->
