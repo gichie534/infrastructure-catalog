@@ -8,6 +8,71 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-redshift-serverless-v0.1.0
+
+Initial release. A Redshift Serverless namespace + workgroup, plus the IAM role Redshift assumes to
+`COPY` from S3.
+
+- **Required inputs:** `name`, `subnet_ids`. **Key optional inputs:** `database_name` (default
+  `dev`), `admin_username` (default `dbadmin`), `base_capacity` (default 8 RPUs — the minimum),
+  `max_capacity`, `s3_read_bucket_arns`, `security_group_ids`, `publicly_accessible` (default
+  `false`), `log_exports`, `config_parameters`.
+- **The COPY role is owned by this module**, not the consumer. Redshift requires the role to be
+  associated with the namespace at creation time, its trust policy is Redshift-specific (it needs
+  *both* `redshift.amazonaws.com` and `redshift-serverless.amazonaws.com`), and its permissions
+  derive entirely from `s3_read_bucket_arns`. The same reasoning as `ecs-fargate-service` owning its
+  execution and task roles. It is set as the namespace default, so a statement can say
+  `IAM_ROLE default`.
+- **No password anywhere by default.** `manage_admin_password` is enabled unless
+  `admin_user_password` is explicitly set, so Redshift creates and rotates the credential secret in
+  Secrets Manager — nothing sensitive passes through a variable or into state. The provider declares
+  the two as conflicting, so the module omits `manage_admin_password` entirely (passes `null`) when a
+  password is supplied rather than setting it `false`.
+- **`subnet_ids` is validated to require at least three subnets.** Redshift Serverless rejects fewer
+  than three spanning three AZs, and it does so several minutes into an apply. Catching it at plan
+  time is the difference between a fast failure and a slow one.
+- Naming is validated as lowercase-and-hyphens only; Redshift Serverless rejects uppercase and
+  underscores, which is easy to trip over coming from other AWS services.
+
+## aws-kinesis-firehose-v0.1.0
+
+Initial release. A Firehose delivery stream that buffers records to S3, plus the IAM role it assumes
+and the CloudWatch log group it reports delivery failures to.
+
+- **Required inputs:** `name`, `destination_bucket_arn`. **Key optional inputs:**
+  `source_kinesis_stream_arn` (null = a Direct PUT stream), `prefix`, `error_output_prefix`,
+  `buffering_size_mb` (default 5), `buffering_interval_seconds` (default 300),
+  `compression_format`, `enable_cloudwatch_logging` (default `true`), `log_retention_in_days`.
+- **The delivery role is owned by this module** for the same reason as above: it exists solely to
+  serve this delivery stream and its permissions are fully derived from the source stream and
+  destination bucket. The S3 statement includes the multipart actions because Firehose uploads
+  multipart — a policy with only `PutObject` fails at delivery time, not at apply time.
+- **`buffering_interval_seconds` is exported as an output.** On a low-volume stream the size
+  threshold is never reached, so the interval alone governs when data lands in S3 and is therefore
+  the floor on end-to-end freshness. A consumer comparing a streaming path against a direct
+  `PutObject` needs the number to measure the gap rather than guess at it.
+- **Logging defaults on.** Without it, a delivery stream that cannot write to its destination fails
+  silently — there is no error surfaced to the producer, which keeps succeeding.
+- `destination_bucket_arn` is validated to be a *bucket* ARN rather than an object ARN; passing
+  `arn:aws:s3:::bucket/*` is the obvious mistake and produces a confusing permissions failure later.
+
+## aws-kinesis-stream-v0.1.0
+
+Initial release. A single Kinesis data stream.
+
+- **Required input:** `name`. **Key optional inputs:** `stream_mode` (default `PROVISIONED`),
+  `shard_count` (default 1), `retention_period_hours` (default 24), `encryption_type` (default
+  `KMS`), `kms_key_id` (default `alias/aws/kinesis`), `shard_level_metrics`,
+  `enforce_consumer_deletion`.
+- Owns **only the stream** — no producer/consumer IAM, no downstream delivery. Those are the
+  consumer's composition concern, wired from the exported ARN.
+- **`shard_count` and `stream_mode` are validated as a pair.** `ON_DEMAND` rejects a shard count and
+  `PROVISIONED` requires one; the module fails at plan time instead of during apply.
+- Encryption is on by default via the AWS-managed Kinesis key, which carries no extra key charge.
+- `shard_level_metrics` is empty by default because each enabled metric bills as a custom CloudWatch
+  metric. The docs call out `WriteProvisionedThroughputExceeded` (producer throttling) and
+  `IteratorAgeMilliseconds` (consumer lag) as the two worth enabling first.
+
 ## aws-eks-v0.2.0
 
 `kubernetes_version` now defaults to **1.36** (was 1.31). No change to the input/output contract.
