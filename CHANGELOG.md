@@ -8,6 +8,61 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-eks-v0.2.0
+
+`kubernetes_version` now defaults to **1.36** (was 1.31). No change to the input/output contract.
+
+- **Why now.** 1.31 left standard support on 26 Nov 2025 and its *extended* support ends
+  **26 Nov 2026** — after which EKS upgrades the cluster automatically to the oldest still-supported
+  version, so the pin stops meaning anything. 1.36 is the newest version on standard support
+  (EKS release 2 Jun 2026, standard support until 2 Aug 2027).
+- **Standard support at the time of writing:** 1.36, 1.35, 1.34. **Extended support** (billed at a
+  higher hourly rate): 1.33, 1.32, 1.31.
+- **This is not a safe in-place bump for a running cluster.** EKS upgrades one minor version at a
+  time, so an existing 1.31 cluster cannot jump to 1.36 in a single apply. Labs in this catalog are
+  built to be destroyed and recreated, which is the intended path; a long-lived cluster has to step
+  through 1.32 → 1.33 → 1.34 → 1.35 → 1.36.
+- The default is documented as "newest on standard support at the time of release", with a pointer to
+  the EKS release calendar, so the next person knows the value is a snapshot rather than a constant.
+
+## gcp-gke-v0.3.0
+
+The node identity is now expressible in Terraform. Previously the module said nothing about it, so
+every cluster ran its nodes as the project's Compute Engine default service account.
+
+- **New inputs:** `create_node_service_account` (default `false`), `node_service_account`,
+  `node_service_account_id`, `node_service_account_roles`
+  (default `["roles/container.defaultNodeServiceAccount"]`).
+- **New output:** `node_service_account_email` — null when the cluster falls back to the default
+  Compute Engine service account.
+- **The failure this fixes.** Google no longer grants `roles/editor` to the Compute Engine default
+  service account on new projects, and the
+  `iam.automaticIamGrantsForDefaultServiceAccounts` org policy removes it everywhere it is enforced.
+  On such a project the default account holds **no roles at all**, so nodes boot, fail to register
+  with the control plane, and are deleted again — `NodeController ... DeletingNode ... because it does
+  not exist in the cloud provider`. The cluster reports `RUNNING` with a **blank node count** and
+  every pod, including `kube-system`, sits `Pending` with `no nodes available to schedule pods`.
+  Nothing in the error text mentions IAM; quota, CIDR exhaustion and Autopilot resource ratios all
+  look like better suspects and are not the cause. The console's only hint is an advisory to grant
+  `roles/container.defaultNodeServiceAccount` to the node service account.
+- **Autopilot sets this through `cluster_autoscaling.auto_provisioning_defaults.service_account`**,
+  not `node_config` — Autopilot has no node pools to attach an account to, and `node_config`
+  conflicts with `enable_autopilot`. The block is emitted only when an account is known, because an
+  empty `cluster_autoscaling` block also conflicts with `enable_autopilot`.
+- **Ordering matters:** the cluster `depends_on` the role bindings. Created the other way round, the
+  first node boots unauthorised and the cluster recovers from a self-inflicted outage.
+- **`google_project_iam_member`, not `_binding`** — additive and non-authoritative, so it cannot
+  strip other members from the role. This matters because sibling clusters in the same project may
+  share the default account.
+- **Default is `false`**, which keeps existing consumers byte-identical; a cluster already applied
+  from `v0.2.x` does not change until it opts in. The dedicated account is the better posture
+  (it is least-privilege and Google's own recommendation), but flipping the default would silently
+  re-issue the node identity of every already-deployed cluster on the next apply.
+- **The SA is created here rather than composed from `gcp/service-account`** because its lifecycle
+  *is* the cluster's — it has no reason to exist without it, and splitting it makes the required role
+  grant easy to omit, which is the entire bug. Consumers who want to own the account themselves pass
+  `node_service_account` instead.
+
 ## gcp-ha-vpn-tunnels-v0.1.0
 
 New module: **phase 3** of an HA VPN peering — the external VPN gateway describing the peer, a
