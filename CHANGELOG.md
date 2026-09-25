@@ -8,6 +8,12 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
+## aws-redshift-serverless-v0.1.1
+
+Mark `admin_username` output as sensitive.
+
+- Fix: Annotate `admin_username` with `sensitive = true` in the module and basic example outputs to satisfy OpenTofu / Terraform sensitive value export restrictions.
+
 ## aws-redshift-serverless-v0.1.0
 
 Initial release. A Redshift Serverless namespace + workgroup, plus the IAM role Redshift assumes to

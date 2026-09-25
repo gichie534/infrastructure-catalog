@@ -26,6 +26,7 @@ output "copy_role_arn" {
 output "admin_username" {
   description = "Username of the database administrator."
   value       = module.redshift.admin_username
+  sensitive   = true
 }
 
 output "admin_password_secret_arn" {

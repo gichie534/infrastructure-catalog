@@ -56,6 +56,7 @@ output "copy_role_name" {
 output "admin_username" {
   description = "Username of the database administrator."
   value       = aws_redshiftserverless_namespace.this.admin_username
+  sensitive   = true
 }
 
 output "admin_password_secret_arn" {
