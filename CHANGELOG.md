@@ -8,11 +8,62 @@ the `release-module` steering:
 - **MINOR** — backward-compatible additions (new optional inputs, new outputs, opt-in behaviour).
 - **PATCH** — fixes that don't change the contract (bug fixes, refactors, docs/tests).
 
-## aws-redshift-serverless-v0.1.1
+## gcp-billing-budget-v0.1.0
 
-Mark `admin_username` output as sensitive.
+New module: a single **Cloud Billing budget** and its threshold rules. The GCP counterpart of `aws/budget`.
 
-- Fix: Annotate `admin_username` with `sensitive = true` in the module and basic example outputs to satisfy OpenTofu / Terraform sensitive value export restrictions.
+- **Inputs:** `billing_account`, `display_name`, `threshold_rules` (required); `amount` *or*
+  `use_last_period_amount`, `currency_code`, `calendar_period` (default `MONTH`) / `custom_period`,
+  `projects`, `resource_ancestors`, `services`, `label_filter`, `credit_types_treatment` (default
+  `INCLUDE_ALL_CREDITS`), `credit_types`, `notification_channel_ids` (max 5), `pubsub_topic`,
+  `disable_default_iam_recipients`, `enable_project_level_recipients`, `ownership_scope`.
+- **Outputs:** `id`, `name`, `budget_id`, `display_name`, `billing_account`, `threshold_count`.
+- **`projects` is validated as `projects/<NUMBER>`.** The API only takes project numbers and its error does
+  not say so.
+- **A budget that alerts nobody fails at plan time** (default IAM recipients off, no channel, no project
+  owner recipient). Pub/Sub does not count — it is a periodic status feed, not an alert.
+- **Consumer requirements:** a billing-account role (`roles/billing.costsManager`), and with user ADC a
+  provider with `billing_project` + `user_project_override = true`.
+- No `labels` input: budgets are not labelable.
+
+## gcp-notification-channels-v0.1.0
+
+New module: Cloud Monitoring **email notification channels**, one per address.
+
+- **Inputs:** `project_id`, `email_addresses` (required); `display_name_prefix`, `description`, `enabled`,
+  `labels`.
+- **Outputs:** `ids` (ordered like the input — what a budget's `notification_channel_ids` takes),
+  `ids_by_email`, `verification_statuses`.
+- Email channels need no confirmation, unlike SNS email subscriptions — so a typo is a silent channel.
+- `force_delete = false`: destroying a channel still referenced by an alerting policy fails loudly.
+
+## gcp-pubsub-topic-v0.1.0
+
+New module: a **Pub/Sub topic** other principals may publish to, plus optional pull subscriptions. The GCP
+counterpart of `aws/sns-topic`.
+
+- **Inputs:** `project_id`, `name` (required); `publisher_members`, `pull_subscriptions`,
+  `message_retention_duration`, `kms_key_name`, `labels`.
+- **Outputs:** `id`, `name`, `publisher_members`, `subscription_ids`.
+- **Why:** Cloud Billing publishes as `billing-budget-alert@system.gserviceaccount.com`; without
+  `roles/pubsub.publisher` on the topic nothing is delivered. Grants are additive (`_iam_member`) so the
+  module never strips a grant Google added itself.
+- Subscriptions default to **never expire** — Google's default deletes one after 31 idle days, which is
+  what a quiet alert feed looks like.
+
+## gcp-bigquery-dataset-v0.1.0
+
+New module: a single **BigQuery dataset**.
+
+- **Inputs:** `project_id`, `dataset_id`, `location` (required); `friendly_name`, `description`,
+  `default_table_expiration_ms`, `default_partition_expiration_ms`, `delete_contents_on_destroy` (default
+  `false`), `kms_key_name`, `iam_members`, `labels`.
+- **Outputs:** `id`, `dataset_id`, `project_id`, `location`, `fully_qualified_name`, `self_link`.
+- **Access is additive only** and drift on `access` is ignored: the Cloud Billing export adds its own
+  service account as dataset OWNER, and an authoritative access list would remove it and stop the export
+  silently.
+- `location` documents the billing-export consequence: only a multi-region dataset gets the current and
+  previous month backfilled.
 
 ## aws-redshift-serverless-v0.1.0
 
